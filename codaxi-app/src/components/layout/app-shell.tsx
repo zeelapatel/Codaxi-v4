@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { 
@@ -31,8 +31,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { GlobalSearch } from './global-search'
-import { useCurrentUser } from '@/lib/queries'
+import { GlobalSearch } from '@/components/layout/global-search'
+import { useAuth } from '@/contexts/auth-context'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -52,8 +52,13 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { sidebarOpen, setSidebarOpen, setSearchOpen } = useUIStore()
-  const { data: user } = useCurrentUser()
+  const { user, logout } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const isActive = (href: string) => {
     if (href === '/dashboard') {
@@ -62,10 +67,16 @@ export function AppShell({ children }: AppShellProps) {
     return pathname.startsWith(href)
   }
 
-  const handleSignOut = () => {
-    // Clear any stored auth data (localStorage, cookies, etc.)
-    // In a real app, you'd call your logout API here
-    router.push('/')
+  const handleSignOut = async () => {
+    try {
+      // Navigate to home page first using window.location to bypass React Router
+      window.location.href = '/'
+      // Then logout (this will clear the auth state)
+      await logout()
+    } catch (error) {
+      console.error('Sign out error:', error)
+      // The navigation should have already happened
+    }
   }
 
   const Sidebar = () => (
@@ -108,14 +119,14 @@ export function AppShell({ children }: AppShellProps) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="w-full justify-start gap-3 h-auto p-3">
               <Avatar className="w-8 h-8">
-                <AvatarImage src={user?.data.avatar} />
+                <AvatarImage src={user?.avatar} />
                 <AvatarFallback>
-                  {user?.data.name?.split(' ').map(n => n[0]).join('') || 'U'}
+                  {user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
                 </AvatarFallback>
               </Avatar>
               <div className="text-left">
-                <div className="text-sm font-medium">{user?.data.name}</div>
-                <div className="text-xs text-muted-foreground">{user?.data.email}</div>
+                <div className="text-sm font-medium">{user?.name}</div>
+                <div className="text-xs text-muted-foreground">{user?.email}</div>
               </div>
             </Button>
           </DropdownMenuTrigger>
@@ -208,8 +219,14 @@ export function AppShell({ children }: AppShellProps) {
                   size="sm"
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 >
-                  <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                  <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  {mounted ? (
+                    <>
+                      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                    </>
+                  ) : (
+                    <div className="h-4 w-4" />
+                  )}
                   <span className="sr-only">Toggle theme</span>
                 </Button>
               </div>

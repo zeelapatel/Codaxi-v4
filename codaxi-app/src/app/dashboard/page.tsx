@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRepos, useActivity, useBillingUsage } from '@/lib/queries'
 import { useAnalyticsStore } from '@/lib/store'
+import { ProtectedRoute } from '@/components/auth/protected-route'
 import { 
   GitBranch, 
   Clock, 
@@ -23,7 +24,7 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 
-export default function DashboardPage() {
+function DashboardContent() {
   const { track } = useAnalyticsStore()
   const { data: repos, isLoading: reposLoading } = useRepos()
   const { data: activity, isLoading: activityLoading } = useActivity()
@@ -335,5 +336,13 @@ export default function DashboardPage() {
         </Card>
       </div>
     </AppShell>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
   )
 }

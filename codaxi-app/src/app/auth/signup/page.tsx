@@ -11,9 +11,12 @@ import { GitBranch, Github, Eye, EyeOff, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { useAuth } from '@/contexts/auth-context'
+import { GuestRoute } from '@/components/auth/protected-route'
 
-export default function SignUpPage() {
+function SignUpContent() {
   const router = useRouter()
+  const { register, isLoading: authLoading } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -22,7 +25,6 @@ export default function SignUpPage() {
     password: '',
     confirmPassword: ''
   })
-  const [isLoading, setIsLoading] = useState(false)
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -30,30 +32,37 @@ export default function SignUpPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
     
     // Basic validation
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match')
-      setIsLoading(false)
+    if (!formData.name || !formData.email || !formData.password) {
+      toast.error('Please fill in all required fields')
       return
     }
 
-    // Simulate registration
-    setTimeout(() => {
-      setIsLoading(false)
-      toast.success('Account created successfully!')
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('Passwords do not match')
+      return
+    }
+
+    if (formData.password.length < 8) {
+      toast.error('Password must be at least 8 characters long')
+      return
+    }
+
+    const success = await register({
+      name: formData.name,
+      email: formData.email,
+      password: formData.password,
+      company: formData.company || undefined
+    })
+
+    if (success) {
       router.push('/dashboard')
-    }, 1500)
+    }
   }
 
   const handleOAuthSignup = (provider: string) => {
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
-      toast.success(`Account created with ${provider}`)
-      router.push('/dashboard')
-    }, 1000)
+    toast.info(`${provider} integration coming soon!`)
   }
 
   const benefits = [
@@ -105,7 +114,7 @@ export default function SignUpPage() {
                 variant="outline" 
                 className="w-full" 
                 onClick={() => handleOAuthSignup('GitHub')}
-                disabled={isLoading}
+                disabled={authLoading}
               >
                 <Github className="w-4 h-4 mr-2" />
                 Sign up with GitHub
@@ -114,7 +123,7 @@ export default function SignUpPage() {
                 variant="outline" 
                 className="w-full"
                 onClick={() => handleOAuthSignup('Google')}
-                disabled={isLoading}
+                disabled={authLoading}
               >
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -235,8 +244,8 @@ export default function SignUpPage() {
                 </Label>
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
+              <Button type="submit" className="w-full" disabled={authLoading}>
+                {authLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
                     Creating account...
@@ -263,5 +272,13 @@ export default function SignUpPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SignUpPage() {
+  return (
+    <GuestRoute>
+      <SignUpContent />
+    </GuestRoute>
   )
 }
