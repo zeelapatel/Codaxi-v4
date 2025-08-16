@@ -82,7 +82,7 @@ export class GitHubService {
     try {
       const response = await this.apiClient.get('/user', {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         }
       })
       return response.data
@@ -96,19 +96,39 @@ export class GitHubService {
    */
   async getUserRepositories(accessToken: string, username?: string): Promise<GitHubRepository[]> {
     try {
+      console.log('[GitHubService] Getting user repositories', { username })
       const endpoint = username ? `/users/${username}/repos` : '/user/repos'
+      console.log('[GitHubService] Using endpoint:', endpoint)
+
+      const params = {
+        sort: 'updated',
+        per_page: 100,
+        affiliation: 'owner,collaborator,organization_member'
+      }
+      console.log('[GitHubService] Request params:', params)
+
       const response = await this.apiClient.get(endpoint, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         },
-        params: {
-          sort: 'updated',
-          per_page: 100,
-          type: 'all'
-        }
+        params
       })
+
+      console.log('[GitHubService] GitHub API response:', {
+        status: response.status,
+        repoCount: response.data.length,
+        firstRepo: response.data[0] ? {
+          id: response.data[0].id,
+          full_name: response.data[0].full_name
+        } : null
+      })
+
       return response.data
     } catch (error) {
+      console.error('[GitHubService] Error getting repositories:', {
+        error: this.getErrorMessage(error),
+        fullError: error
+      })
       throw new Error(`Failed to get repositories: ${this.getErrorMessage(error)}`)
     }
   }
@@ -120,7 +140,7 @@ export class GitHubService {
     try {
       const response = await this.apiClient.get(`/repos/${owner}/${repo}`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         }
       })
       return response.data
@@ -136,7 +156,7 @@ export class GitHubService {
     try {
       const response = await this.apiClient.get(`/repos/${owner}/${repo}/branches`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         },
         params: {
           per_page: 100
@@ -168,7 +188,7 @@ export class GitHubService {
 
       const response = await this.apiClient.get(`/repos/${owner}/${repo}/commits`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         },
         params
       })
@@ -194,7 +214,7 @@ export class GitHubService {
 
       const response = await this.apiClient.get(`/repos/${owner}/${repo}/contents/${path}`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         },
         params
       })
@@ -217,7 +237,7 @@ export class GitHubService {
     try {
       const response = await this.apiClient.get(`/repos/${owner}/${repo}/git/trees/${treeSha}`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         },
         params: {
           recursive: recursive ? 1 : 0
@@ -253,7 +273,7 @@ export class GitHubService {
 
       const response = await this.apiClient.post(`/repos/${owner}/${repo}/hooks`, webhookData, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         }
       })
       return response.data
@@ -269,7 +289,7 @@ export class GitHubService {
     try {
       const response = await this.apiClient.get(`/repos/${owner}/${repo}/hooks`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         }
       })
       return response.data
@@ -285,7 +305,7 @@ export class GitHubService {
     try {
       await this.apiClient.delete(`/repos/${owner}/${repo}/hooks/${hookId}`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         }
       })
     } catch (error) {
@@ -319,7 +339,7 @@ export class GitHubService {
     try {
       const response = await this.apiClient.get(`/repos/${owner}/${repo}/languages`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         }
       })
       return response.data
@@ -335,7 +355,7 @@ export class GitHubService {
     try {
       const response = await this.apiClient.get(`/repos/${owner}/${repo}/contributors`, {
         headers: {
-          'Authorization': `token ${accessToken}`
+          'Authorization': `Bearer ${accessToken}`
         },
         params: {
           per_page: 100

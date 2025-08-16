@@ -91,7 +91,7 @@ function DashboardContent() {
           </div>
           <div className="flex gap-3">
             <Button asChild>
-              <Link href="/repos">
+              <Link href="/repos/select">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Repository
               </Link>

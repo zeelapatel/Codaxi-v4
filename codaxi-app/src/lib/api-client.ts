@@ -216,6 +216,24 @@ class ApiClient {
     return this.request<GitHubConnectedRepositoriesResponse>('/github/repositories/connected')
   }
 
+  // Repository details with scan status
+  async getRepositoryDetails(repoId: string): Promise<ApiResponse<{
+    id: string
+    owner: string
+    name: string
+    description: string
+    languages: string[]
+    docsFreshness: number
+    lastScan: {
+      status: 'queued' | 'parsing' | 'embedding' | 'generating' | 'completed' | 'error'
+      timestamp: string
+    } | null
+    isFavorite: boolean
+    updatedAt: string
+  }>> {
+    return this.request(`/github/repositories/${repoId}/details`)
+  }
+
   // GitHub account management
   async disconnectGitHubAccount(): Promise<ApiResponse> {
     return this.request('/github/account', {
@@ -226,6 +244,9 @@ class ApiClient {
 
 // Create and export singleton instance
 export const apiClient = new ApiClient(API_BASE_URL)
+
+// Export the ApiClient class for type checking
+export type { ApiClient }
 
 // Helper function to check if user is authenticated
 export function isAuthenticated(): boolean {

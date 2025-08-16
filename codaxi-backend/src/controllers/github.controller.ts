@@ -130,14 +130,21 @@ export class GitHubController {
    */
   static async getUserRepositories(req: AuthenticatedRequest, res: Response) {
     try {
+      console.log('[GitHubController] Getting repositories for user')
       const { userId } = req.user!
       
       // Get user's GitHub connection
+      console.log('[GitHubController] Finding GitHub connection for user:', userId)
       const connection = await prisma.gitHubConnection.findFirst({
         where: {
           userId,
           isActive: true
         }
+      })
+      console.log('[GitHubController] GitHub connection found:', {
+        found: !!connection,
+        connectionId: connection?.id,
+        githubUsername: connection?.githubUsername
       })
 
       if (!connection) {
@@ -150,9 +157,60 @@ export class GitHubController {
       }
 
       // Get repositories from GitHub
+      console.log('[GitHubController] Fetching repositories from GitHub')
       const repositories = await githubService.getUserRepositories(connection.accessToken)
+      console.log('[GitHubController] GitHub repositories fetched:', {
+        count: repositories.length,
+        repositories: repositories.map(r => ({ id: r.id, full_name: r.full_name }))
+      })
 
-      sendSuccess(res, { repositories }, 'GitHub repositories retrieved successfully')
+      // Get connected repository IDs to exclude them
+      console.log('[GitHubController] Finding already connected repositories')
+      const connectedRepos = await prisma.gitHubRepositoryConnection.findMany({
+        where: {
+          githubConnection: {
+            userId,
+            isActive: true
+          },
+          isActive: true
+        },
+        select: {
+          githubRepoId: true
+        }
+      })
+
+      const connectedRepoIds = new Set(connectedRepos.map((r: { githubRepoId: number }) => r.githubRepoId))
+      console.log('[GitHubController] Connected repository IDs:', {
+        count: connectedRepoIds.size,
+        ids: Array.from(connectedRepoIds)
+      })
+
+      // Filter out already connected repositories and get additional details
+      console.log('[GitHubController] Filtering and enriching repositories')
+      const availableRepos = await Promise.all(
+        repositories
+          .filter(repo => !connectedRepoIds.has(repo.id))
+          .map(async (repo) => {
+            try {
+              // Get languages for each repository
+              const languages = await githubService.getRepositoryLanguages(
+                connection.accessToken,
+                repo.full_name.split('/')[0],
+                repo.name
+              )
+
+              return {
+                ...repo,
+                languages: Object.keys(languages)
+              }
+            } catch (error) {
+              console.error(`Error fetching languages for ${repo.full_name}:`, error)
+              return repo
+            }
+          })
+      )
+
+      sendSuccess(res, { repositories: availableRepos }, 'GitHub repositories retrieved successfully')
     } catch (error) {
       console.error('Error getting repositories:', error)
       sendError(res, 'Failed to retrieve repositories', 500)
@@ -333,28 +391,130 @@ export class GitHubController {
     try {
       const { userId } = req.user!
 
-             const connections = await prisma.gitHubRepositoryConnection.findMany({
-         where: {
-           githubConnection: {
-             userId,
-             isActive: true
-           },
-           isActive: true
-         },
-         include: {
-           githubConnection: {
-             select: {
-               githubUsername: true,
-               isActive: true
-             }
-           }
-         }
-       })
+      const connections = await prisma.gitHubRepositoryConnection.findMany({
+        where: {
+          githubConnection: {
+            userId,
+            isActive: true
+          },
+          isActive: true
+        },
+        include: {
+          githubConnection: {
+            select: {
+              githubUsername: true,
+              isActive: true,
+              accessToken: true
+            }
+          }
+        }
+      })
 
-      sendSuccess(res, { connections }, 'Connected repositories retrieved successfully')
+      // Get additional details for each repository
+      const reposWithDetails = await Promise.all(
+        connections.map(async (conn: any) => {
+          try {
+            const repo = await githubService.getRepository(
+              conn.githubConnection.accessToken,
+              conn.githubRepoFullName.split('/')[0],
+              conn.githubRepoFullName.split('/')[1]
+            )
+
+            const languages = await githubService.getRepositoryLanguages(
+              conn.githubConnection.accessToken,
+              conn.githubRepoFullName.split('/')[0],
+              conn.githubRepoFullName.split('/')[1]
+            )
+
+            return {
+              ...conn,
+              repository: {
+                ...repo,
+                languages: Object.keys(languages)
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching details for ${conn.githubRepoFullName}:`, error)
+            return conn
+          }
+        })
+      )
+
+      sendSuccess(res, { connections: reposWithDetails }, 'Connected repositories retrieved successfully')
     } catch (error) {
       console.error('Error getting connected repositories:', error)
       sendError(res, 'Failed to retrieve connected repositories', 500)
+    }
+  }
+
+  /**
+   * Get repository details
+   */
+  static async getRepositoryDetails(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { userId } = req.user!
+      const { repoId } = req.params
+
+      const connection = await prisma.gitHubRepositoryConnection.findFirst({
+        where: {
+          repositoryId: repoId,
+          githubConnection: {
+            userId,
+            isActive: true
+          },
+          isActive: true
+        },
+        include: {
+          githubConnection: {
+            select: {
+              accessToken: true
+            }
+          }
+        }
+      })
+
+      if (!connection) {
+        return sendError(res, 'Repository not found', 404)
+      }
+
+      // Get repository details from GitHub
+      const [owner, repo] = connection.githubRepoFullName.split('/')
+      const repository = await githubService.getRepository(
+        connection.githubConnection.accessToken,
+        owner,
+        repo
+      )
+
+      // Get languages
+      const languages = await githubService.getRepositoryLanguages(
+        connection.githubConnection.accessToken,
+        owner,
+        repo
+      )
+
+      // Get last scan status (mock for now)
+      const lastScan = {
+        status: 'completed' as const,
+        timestamp: new Date().toISOString()
+      }
+
+      // Calculate docs freshness (mock for now)
+      const docsFreshness = 85
+
+      sendSuccess(res, {
+        id: connection.repositoryId,
+        owner,
+        name: repo,
+        description: repository.description || '',
+        languages: Object.keys(languages),
+        docsFreshness,
+        lastScan,
+        isFavorite: false, // Mock for now
+        updatedAt: repository.updated_at
+      }, 'Repository details retrieved successfully')
+    } catch (error) {
+      console.error('Error getting repository details:', error)
+      sendError(res, 'Failed to retrieve repository details', 500)
     }
   }
 

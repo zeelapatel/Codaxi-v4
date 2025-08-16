@@ -44,14 +44,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const response = await apiClient.getProfile()
           if (response.success && response.data) {
             setUser(response.data)
-            // You could also fetch organization data here if needed
+            
+            // Fetch GitHub connection status
+            try {
+              const githubResponse = await apiClient.getConnectedRepositories()
+              const connections = githubResponse.data?.connections || []
+              if (connections.length > 0) {
+                const connection = connections[0]
+                // Clear any existing GitHub state
+                setGithubConnection(null)
+                setGithubUser(null)
+              } else {
+                // No active GitHub connection
+                setGithubConnection(null)
+                setGithubUser(null)
+              }
+            } catch (githubError) {
+              console.error('Failed to fetch GitHub connection:', githubError)
+              // Clear GitHub state if there's an error
+              setGithubConnection(null)
+              setGithubUser(null)
+            }
           } else {
-            // Invalid token, clear it
+            // Invalid token, clear all state
             apiClient.setToken(null)
+            setUser(null)
+            setOrganization(null)
+            setGithubConnection(null)
+            setGithubUser(null)
           }
         } catch (error) {
           console.error('Failed to verify token:', error)
+          // Clear all state on error
           apiClient.setToken(null)
+          setUser(null)
+          setOrganization(null)
+          setGithubConnection(null)
+          setGithubUser(null)
         }
       }
       
@@ -100,6 +129,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(response.data.user)
         setOrganization(response.data.organization || null)
         toast.success(response.message || 'Account created successfully!')
+        // Ensure we have the token set
+        if (response.data.token) {
+          apiClient.setToken(response.data.token)
+        }
         return true
       } else {
         // Handle validation errors
@@ -124,14 +157,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async (): Promise<void> => {
     try {
       await apiClient.logout()
+      // Clear all auth-related state
       setUser(null)
       setOrganization(null)
+      setGithubConnection(null)
+      setGithubUser(null)
+      apiClient.setToken(null)
       toast.success('Logged out successfully')
     } catch (error) {
       console.error('Logout error:', error)
       // Still clear local state even if API call fails
       setUser(null)
       setOrganization(null)
+      setGithubConnection(null)
+      setGithubUser(null)
       apiClient.setToken(null)
     }
   }
@@ -167,6 +206,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await apiClient.handleGitHubCallback(data)
 
       if (response.success && response.data) {
+        // Clear any existing GitHub state first
+        setGithubConnection(null)
+        setGithubUser(null)
+        
+        // Set new GitHub state
         setGithubConnection(response.data.connection)
         setGithubUser(response.data.githubUser)
         toast.success('GitHub account connected successfully!')
@@ -177,6 +221,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('GitHub callback error:', error)
+      // Clear GitHub state on error
+      setGithubConnection(null)
+      setGithubUser(null)
       toast.error('Failed to connect GitHub account')
       return false
     } finally {

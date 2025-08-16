@@ -14,6 +14,7 @@ router.get('/repositories', authenticate, GitHubController.getUserRepositories)
 router.post('/repositories/connect', authenticate, GitHubController.connectRepository)
 router.delete('/repositories/:connectionId', authenticate, GitHubController.disconnectRepository)
 router.get('/repositories/connected', authenticate, GitHubController.getConnectedRepositories)
+router.get('/repositories/:repoId/details', authenticate, GitHubController.getRepositoryDetails)
 
 // Account management
 router.delete('/account', authenticate, GitHubController.disconnectAccount)

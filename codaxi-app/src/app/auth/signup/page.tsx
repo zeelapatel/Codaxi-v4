@@ -33,31 +33,40 @@ function SignUpContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Basic validation
-    if (!formData.name || !formData.email || !formData.password) {
-      toast.error('Please fill in all required fields')
-      return
-    }
+    try {
+      // Basic validation
+      if (!formData.name || !formData.email || !formData.password) {
+        toast.error('Please fill in all required fields')
+        return
+      }
 
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match')
-      return
-    }
+      if (formData.password !== formData.confirmPassword) {
+        toast.error('Passwords do not match')
+        return
+      }
 
-    if (formData.password.length < 8) {
-      toast.error('Password must be at least 8 characters long')
-      return
-    }
+      if (formData.password.length < 8) {
+        toast.error('Password must be at least 8 characters long')
+        return
+      }
 
-    const success = await register({
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      company: formData.company || undefined
-    })
+      const success = await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        company: formData.company || undefined
+      })
 
-    if (success) {
-      router.push('/onboarding')
+      if (success) {
+        // Use replace instead of push to prevent going back to signup
+        // Add a small delay to ensure token is properly set
+        setTimeout(() => {
+          router.replace('/onboarding?step=github&fromSignup=true')
+        }, 100)
+      }
+    } catch (error) {
+      console.error('Signup error:', error)
+      toast.error('Failed to create account. Please try again.')
     }
   }
 

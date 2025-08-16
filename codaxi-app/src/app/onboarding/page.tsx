@@ -24,20 +24,34 @@ import { ProtectedRoute } from '@/components/auth/protected-route'
 function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { connectGitHub, handleGitHubCallback, isGitHubConnected } = useAuth()
+  const { connectGitHub, handleGitHubCallback, isGitHubConnected, disconnectGitHub } = useAuth()
   const [currentStep, setCurrentStep] = useState(1)
   const [isConnecting, setIsConnecting] = useState(false)
 
-  // Handle GitHub OAuth callback
+  // Handle URL parameters and GitHub connection status
   useEffect(() => {
     const github = searchParams.get('github')
-    if (github === 'success') {
+    const step = searchParams.get('step')
+
+    if (step === 'github') {
+      setCurrentStep(2) // Go to GitHub connection step
+    } else if (github === 'success') {
       toast.success('GitHub account connected successfully!')
       setCurrentStep(3)
     } else if (github === 'error') {
       toast.error('Failed to connect GitHub account')
+      setCurrentStep(2) // Stay on GitHub step to try again
     }
   }, [searchParams])
+
+  // Handle initial GitHub state
+  useEffect(() => {
+    // Only reset GitHub state if we're coming from signup
+    const fromSignup = searchParams.get('fromSignup') === 'true'
+    if (fromSignup && isGitHubConnected) {
+      disconnectGitHub()
+    }
+  }, [searchParams, isGitHubConnected, disconnectGitHub])
 
   const handleGitHubConnect = async () => {
     try {

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiClient } from './api'
+import { apiClient } from './api-client'
 import { RepoFilters, AddRepoForm, AskQuestionForm } from '@/types'
 
 // Query Keys
@@ -24,10 +24,34 @@ export const queryKeys = {
 
 // Repo Queries
 export const useRepos = (filters?: RepoFilters) => {
+  const { data: connectedRepos } = useConnectedRepositories()
+  
   return useQuery({
     queryKey: [...queryKeys.repos, filters],
-    queryFn: () => apiClient.getRepos(filters),
+    queryFn: async () => {
+      if (!connectedRepos?.data?.connections) {
+        return { success: true, data: [] }
+      }
+
+      const repoDetails = await Promise.all(
+        connectedRepos.data.connections.map(async (conn) => {
+          try {
+            const details = await apiClient.getRepositoryDetails(conn.repositoryId)
+            return details.data
+          } catch (error) {
+            console.error(`Error fetching details for ${conn.githubRepoFullName}:`, error)
+            return null
+          }
+        })
+      )
+
+      return {
+        success: true,
+        data: repoDetails.filter(Boolean)
+      }
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!connectedRepos?.data?.connections
   })
 }
 
@@ -156,10 +180,33 @@ export const useGraph = (repoId: string) => {
 
 // Activity Queries
 export const useActivity = () => {
+  const { data: connectedRepos } = useConnectedRepositories()
+  
   return useQuery({
     queryKey: queryKeys.activity,
-    queryFn: () => apiClient.getActivity(),
+    queryFn: async () => {
+      if (!connectedRepos?.data?.connections) {
+        return { success: true, data: [] }
+      }
+
+      // For now, we'll create activity items from repository data
+      const activities = connectedRepos.data.connections.map((conn) => ({
+        id: conn.repositoryId,
+        type: 'repo_added',
+        title: `Connected ${conn.githubRepoFullName}`,
+        description: `Repository ${conn.githubRepoFullName} was connected to Codaxi`,
+        timestamp: conn.createdAt
+      }))
+
+      return {
+        success: true,
+        data: activities.sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+      }
+    },
     staleTime: 30 * 1000, // 30 seconds for recent activity
+    enabled: !!connectedRepos?.data?.connections
   })
 }
 
