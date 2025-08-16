@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useRepos, useActivity, useBillingUsage } from '@/lib/queries'
+import { useRepos, useActivity, useBillingUsage, useConnectedRepositories } from '@/lib/queries'
+import { useAuth } from '@/contexts/auth-context'
 import { useAnalyticsStore } from '@/lib/store'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { 
@@ -18,7 +19,8 @@ import {
   Hash,
   BarChart3,
   Plus,
-  ArrowRight
+  ArrowRight,
+  Github
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect } from 'react'
@@ -26,9 +28,11 @@ import { format, formatDistanceToNow } from 'date-fns'
 
 function DashboardContent() {
   const { track } = useAnalyticsStore()
+  const { isGitHubConnected } = useAuth()
   const { data: repos, isLoading: reposLoading } = useRepos()
   const { data: activity, isLoading: activityLoading } = useActivity()
   const { data: billing } = useBillingUsage()
+  const { data: connectedRepos } = useConnectedRepositories()
 
   useEffect(() => {
     track('view_dashboard')
@@ -272,12 +276,35 @@ function DashboardContent() {
                     </div>
                   ))}
                   {repos.data.length === 0 && (
-                    <div className="text-center py-6 text-muted-foreground">
-                      <GitBranch className="w-8 h-8 mx-auto mb-2" />
-                      <p>No repositories yet</p>
-                      <Button variant="outline" size="sm" className="mt-2" asChild>
-                        <Link href="/repos">Add your first repository</Link>
-                      </Button>
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <GitBranch className="w-8 h-8 text-primary" />
+                      </div>
+                      <h3 className="text-lg font-semibold mb-2">
+                        {isGitHubConnected ? 'Add Your First Repository' : 'Connect Your First Repository'}
+                      </h3>
+                      <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                        {isGitHubConnected 
+                          ? 'Your GitHub account is connected! Choose repositories to start generating AI-powered documentation.'
+                          : 'Connect your GitHub repositories to start generating AI-powered documentation and get intelligent insights about your codebase.'}
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        {isGitHubConnected ? (
+                          <Button asChild>
+                            <Link href="/repos">
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Repository
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button asChild>
+                            <Link href="/onboarding">
+                              <Github className="w-4 h-4 mr-2" />
+                              Connect GitHub
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -18,6 +18,8 @@ export const queryKeys = {
   billing: ['billing'] as const,
   user: ['user'] as const,
   organization: ['organization'] as const,
+  githubRepos: ['github-repos'] as const,
+  connectedRepos: ['connected-repos'] as const,
 }
 
 // Repo Queries
@@ -184,5 +186,48 @@ export const useOrganization = () => {
     queryKey: queryKeys.organization,
     queryFn: () => apiClient.getOrganization(),
     staleTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+// GitHub Queries
+export const useGitHubRepositories = () => {
+  return useQuery({
+    queryKey: queryKeys.githubRepos,
+    queryFn: () => apiClient.getGitHubRepositories(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+export const useConnectedRepositories = () => {
+  return useQuery({
+    queryKey: queryKeys.connectedRepos,
+    queryFn: () => apiClient.getConnectedRepositories(),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  })
+}
+
+export const useConnectRepository = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: ({ owner, repo }: { owner: string; repo: string }) => 
+      apiClient.connectGitHubRepository(owner, repo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.connectedRepos })
+      queryClient.invalidateQueries({ queryKey: queryKeys.repos })
+    },
+  })
+}
+
+export const useDisconnectRepository = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (connectionId: string) => 
+      apiClient.disconnectGitHubRepository(connectionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.connectedRepos })
+      queryClient.invalidateQueries({ queryKey: queryKeys.repos })
+    },
   })
 }

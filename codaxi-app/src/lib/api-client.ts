@@ -1,6 +1,15 @@
 // Real API client for backend integration
 const API_BASE_URL = 'http://localhost:5000/api'
 
+// Import GitHub types
+import {
+  GitHubAuthUrlResponse,
+  GitHubConnectionResponse,
+  GitHubRepositoriesResponse,
+  GitHubConnectedRepositoriesResponse,
+  GitHubOAuthRequest
+} from '@/types/github'
+
 export interface ApiResponse<T = any> {
   success: boolean
   message?: string
@@ -169,6 +178,49 @@ class ApiClient {
   // Health check
   async healthCheck(): Promise<ApiResponse> {
     return this.request('/health')
+  }
+
+  // GitHub OAuth methods
+  async generateGitHubAuthUrl(): Promise<ApiResponse<GitHubAuthUrlResponse>> {
+    return this.request<GitHubAuthUrlResponse>('/github/auth/url', {
+      method: 'POST'
+    })
+  }
+
+  async handleGitHubCallback(data: GitHubOAuthRequest): Promise<ApiResponse<GitHubConnectionResponse>> {
+    return this.request<GitHubConnectionResponse>('/github/auth/callback', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  // GitHub repository methods
+  async getGitHubRepositories(): Promise<ApiResponse<GitHubRepositoriesResponse>> {
+    return this.request<GitHubRepositoriesResponse>('/github/repositories')
+  }
+
+  async connectGitHubRepository(owner: string, repo: string): Promise<ApiResponse<GitHubConnectionResponse>> {
+    return this.request<GitHubConnectionResponse>('/github/repositories/connect', {
+      method: 'POST',
+      body: JSON.stringify({ owner, repo })
+    })
+  }
+
+  async disconnectGitHubRepository(connectionId: string): Promise<ApiResponse> {
+    return this.request(`/github/repositories/${connectionId}`, {
+      method: 'DELETE'
+    })
+  }
+
+  async getConnectedRepositories(): Promise<ApiResponse<GitHubConnectedRepositoriesResponse>> {
+    return this.request<GitHubConnectedRepositoriesResponse>('/github/repositories/connected')
+  }
+
+  // GitHub account management
+  async disconnectGitHubAccount(): Promise<ApiResponse> {
+    return this.request('/github/account', {
+      method: 'DELETE'
+    })
   }
 }
 

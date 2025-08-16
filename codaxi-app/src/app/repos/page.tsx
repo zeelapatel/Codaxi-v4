@@ -23,7 +23,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useRepos } from '@/lib/queries'
+import { useRepos, useGitHubRepositories, useConnectedRepositories, useConnectRepository, useDisconnectRepository } from '@/lib/queries'
+import { useAuth } from '@/contexts/auth-context'
 import { useUIStore, useAnalyticsStore } from '@/lib/store'
 import { 
   Plus, 
@@ -40,7 +41,8 @@ import {
   List,
   Eye,
   Settings,
-  BarChart3
+  BarChart3,
+  Github
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect } from 'react'
@@ -50,6 +52,7 @@ import { formatDistanceToNow } from 'date-fns'
 export default function ReposPage() {
   const { track } = useAnalyticsStore()
   const { reposViewMode, setReposViewMode } = useUIStore()
+  const { isGitHubConnected } = useAuth()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<RepoFilters>({})
   
@@ -59,6 +62,10 @@ export default function ReposPage() {
   }
   
   const { data: repos, isLoading } = useRepos(queryFilters)
+  const { data: githubRepos } = useGitHubRepositories()
+  const { data: connectedRepos } = useConnectedRepositories()
+  const { mutate: connectRepo, isPending: isConnecting } = useConnectRepository()
+  const { mutate: disconnectRepo, isPending: isDisconnecting } = useDisconnectRepository()
 
   useEffect(() => {
     track('view_repo_list')
@@ -241,24 +248,41 @@ export default function ReposPage() {
         </TableBody>
       </Table>
       
-      {repos?.data.length === 0 && !isLoading && (
-        <div className="text-center py-12">
-          <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">No repositories found</h3>
-          <p className="text-muted-foreground mb-4">
-            {search || Object.keys(filters).length > 0 
-              ? 'Try adjusting your search or filters'
-              : 'Get started by adding your first repository'
-            }
-          </p>
-          <Button asChild>
-            <Link href="/repos/new">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Repository
-            </Link>
-          </Button>
-        </div>
-      )}
+             {repos?.data.length === 0 && !isLoading && (
+                             <div className="text-center py-12">
+                      <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <GitBranch className="w-10 h-10 text-primary" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-2">
+                        {isGitHubConnected ? 'Add Your First Repository' : 'Connect Your First Repository'}
+                      </h3>
+                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                        {search || Object.keys(filters).length > 0 
+                          ? 'Try adjusting your search or filters'
+                          : isGitHubConnected
+                            ? 'Choose repositories from your GitHub account to start generating documentation.'
+                            : 'Connect your GitHub repositories to start generating AI-powered documentation and get intelligent insights about your codebase.'
+                        }
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        {isGitHubConnected ? (
+                          <Button asChild>
+                            <Link href="/repos/select">
+                              <Plus className="w-4 h-4 mr-2" />
+                              Select Repositories
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button asChild>
+                            <Link href="/onboarding">
+                              <Github className="w-4 h-4 mr-2" />
+                              Connect GitHub
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+       )}
     </Card>
   )
 
@@ -363,26 +387,43 @@ export default function ReposPage() {
         </Card>
       ))}
       
-      {repos?.data.length === 0 && !isLoading && (
-        <div className="col-span-full">
-          <Card className="p-12 text-center">
-            <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No repositories found</h3>
-            <p className="text-muted-foreground mb-4">
-              {search || Object.keys(filters).length > 0 
-                ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first repository'
-              }
-            </p>
-            <Button asChild>
-              <Link href="/repos/new">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Repository
-              </Link>
-            </Button>
-          </Card>
-        </div>
-      )}
+             {repos?.data.length === 0 && !isLoading && (
+                             <div className="col-span-full">
+                      <Card className="p-12 text-center">
+                        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <GitBranch className="w-10 h-10 text-primary" />
+                        </div>
+                        <h3 className="text-xl font-semibold mb-2">
+                          {isGitHubConnected ? 'Add Your First Repository' : 'Connect Your First Repository'}
+                        </h3>
+                        <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                          {search || Object.keys(filters).length > 0 
+                            ? 'Try adjusting your search or filters'
+                            : isGitHubConnected
+                              ? 'Choose repositories from your GitHub account to start generating documentation.'
+                              : 'Connect your GitHub repositories to start generating AI-powered documentation and get intelligent insights about your codebase.'
+                          }
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                          {isGitHubConnected ? (
+                            <Button asChild>
+                              <Link href="/repos/select">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Select Repositories
+                              </Link>
+                            </Button>
+                          ) : (
+                            <Button asChild>
+                              <Link href="/onboarding">
+                                <Github className="w-4 h-4 mr-2" />
+                                Connect GitHub
+                              </Link>
+                            </Button>
+                          )}
+                        </div>
+                      </Card>
+                    </div>
+       )}
     </div>
   )
 

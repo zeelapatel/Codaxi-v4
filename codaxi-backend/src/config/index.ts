@@ -6,7 +6,9 @@ dotenv.config()
 
 const requiredEnvVars = [
   'DATABASE_URL',
-  'JWT_SECRET'
+  'JWT_SECRET',
+  'GITHUB_CLIENT_ID',
+  'GITHUB_CLIENT_SECRET'
 ]
 
 // Validate required environment variables
@@ -27,7 +29,14 @@ export const config: AppConfig = {
   server: {
     port: parseInt(process.env.PORT || '5000', 10),
     environment: process.env.NODE_ENV || 'development',
-    corsOrigin: process.env.FRONTEND_URL || 'http://localhost:3000'
+    corsOrigin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    baseUrl: process.env.BACKEND_URL || 'http://localhost:5000'
+  },
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID!,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    redirectUri: process.env.GITHUB_REDIRECT_URI || 'http://localhost:5000/api/github/auth/callback',
+    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET || 'your-webhook-secret'
   }
 }
 

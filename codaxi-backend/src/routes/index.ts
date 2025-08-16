@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import authRoutes from './auth'
+import githubRoutes from './github'
 import { clearRateLimit } from '../middleware/security'
 
 const router = Router()
@@ -28,5 +29,6 @@ if (process.env.NODE_ENV === 'development') {
 
 // API routes
 router.use('/auth', authRoutes)
+router.use('/github', githubRoutes)
 
 export default router

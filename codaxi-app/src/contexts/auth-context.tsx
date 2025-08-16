@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { apiClient, User, Organization, LoginRequest, RegisterRequest } from '@/lib/api-client'
+import { GitHubConnection, GitHubUser, GitHubOAuthRequest } from '@/types/github'
 import { toast } from 'sonner'
 
 interface AuthContextType {
@@ -9,10 +10,16 @@ interface AuthContextType {
   organization: Organization | null
   isAuthenticated: boolean
   isLoading: boolean
+  githubConnection: GitHubConnection | null
+  githubUser: GitHubUser | null
+  isGitHubConnected: boolean
   login: (data: LoginRequest) => Promise<boolean>
   register: (data: RegisterRequest) => Promise<boolean>
   logout: () => Promise<void>
   refreshProfile: () => Promise<void>
+  connectGitHub: () => Promise<string>
+  handleGitHubCallback: (data: GitHubOAuthRequest) => Promise<boolean>
+  disconnectGitHub: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -21,6 +28,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [githubConnection, setGithubConnection] = useState<GitHubConnection | null>(null)
+  const [githubUser, setGithubUser] = useState<GitHubUser | null>(null)
 
   const isAuthenticated = !!user
 
@@ -138,15 +147,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // GitHub methods
+  const connectGitHub = async (): Promise<string> => {
+    try {
+      const response = await apiClient.generateGitHubAuthUrl()
+      if (response.success && response.data) {
+        return response.data.authUrl
+      }
+      throw new Error(response.message || 'Failed to generate GitHub auth URL')
+    } catch (error) {
+      console.error('GitHub connection error:', error)
+      throw error
+    }
+  }
+
+  const handleGitHubCallback = async (data: GitHubOAuthRequest): Promise<boolean> => {
+    try {
+      setIsLoading(true)
+      const response = await apiClient.handleGitHubCallback(data)
+
+      if (response.success && response.data) {
+        setGithubConnection(response.data.connection)
+        setGithubUser(response.data.githubUser)
+        toast.success('GitHub account connected successfully!')
+        return true
+      } else {
+        toast.error(response.message || 'Failed to connect GitHub account')
+        return false
+      }
+    } catch (error) {
+      console.error('GitHub callback error:', error)
+      toast.error('Failed to connect GitHub account')
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const disconnectGitHub = async (): Promise<void> => {
+    try {
+      setIsLoading(true)
+      const response = await apiClient.disconnectGitHubAccount()
+
+      if (response.success) {
+        setGithubConnection(null)
+        setGithubUser(null)
+        toast.success('GitHub account disconnected successfully')
+      } else {
+        toast.error(response.message || 'Failed to disconnect GitHub account')
+      }
+    } catch (error) {
+      console.error('GitHub disconnect error:', error)
+      toast.error('Failed to disconnect GitHub account')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const isGitHubConnected = !!githubConnection?.isActive
+
   const value: AuthContextType = {
     user,
     organization,
     isAuthenticated,
     isLoading,
+    githubConnection,
+    githubUser,
+    isGitHubConnected,
     login,
     register,
     logout,
-    refreshProfile
+    refreshProfile,
+    connectGitHub,
+    handleGitHubCallback,
+    disconnectGitHub
   }
 
   return (

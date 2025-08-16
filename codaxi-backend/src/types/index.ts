@@ -162,10 +162,19 @@ export interface ServerConfig {
   port: number
   environment: string
   corsOrigin: string
+  baseUrl: string
+}
+
+export interface GitHubConfig {
+  clientId: string
+  clientSecret: string
+  redirectUri: string
+  webhookSecret: string
 }
 
 export interface AppConfig {
   database: DatabaseConfig
   jwt: JwtConfig
   server: ServerConfig
+  github: GitHubConfig
 }

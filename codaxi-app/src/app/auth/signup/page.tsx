@@ -57,7 +57,7 @@ function SignUpContent() {
     })
 
     if (success) {
-      router.push('/dashboard')
+      router.push('/onboarding')
     }
   }
 

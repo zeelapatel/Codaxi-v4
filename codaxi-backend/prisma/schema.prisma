@@ -48,6 +48,8 @@ model User {
   
   // Relations
   organizations OrganizationMember[]
+  gitHubConnections GitHubConnection[]
+  gitHubOAuthStates GitHubOAuthState[]
   
   @@map("users")
 }
@@ -115,4 +117,90 @@ model AuditLog {
   createdAt DateTime @default(now())
   
   @@map("audit_logs")
+}
+
+// GitHub OAuth state for CSRF protection
+model GitHubOAuthState {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("github_oauth_states")
+}
+
+// GitHub account connections
+model GitHubConnection {
+  id             String   @id @default(cuid())
+  userId         String
+  githubUserId   Int
+  githubUsername String
+  
+  // OAuth tokens
+  accessToken    String
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  scope          String
+  
+  // Status
+  isActive       Boolean  @default(true)
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  user                    User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositoryConnections   GitHubRepositoryConnection[]
+  
+  @@unique([userId, githubUserId])
+  @@map("github_connections")
+}
+
+// GitHub repository connections
+model GitHubRepositoryConnection {
+  id                String   @id @default(cuid())
+  githubConnectionId String
+  repositoryId      String   @unique
+  
+  // GitHub repository info
+  githubRepoId      Int
+  githubRepoName    String
+  githubRepoFullName String
+  
+  // Status
+  isActive          Boolean  @default(true)
+  lastSyncAt        DateTime?
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  githubConnection GitHubConnection @relation(fields: [githubConnectionId], references: [id], onDelete: Cascade)
+  webhooks         GitHubWebhook[]
+  
+  @@unique([githubConnectionId, githubRepoId])
+  @@map("github_repository_connections")
+}
+
+// GitHub webhooks
+model GitHubWebhook {
+  id                    String   @id @default(cuid())
+  repositoryConnectionId String
+  webhookId            Int
+  webhookUrl           String
+  webhookSecret        String
+  isActive             Boolean  @default(true)
+  
+  // Timestamps
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  // Relations
+  repositoryConnection GitHubRepositoryConnection @relation(fields: [repositoryConnectionId], references: [id], onDelete: Cascade)
+  
+  @@map("github_webhooks")
 }
