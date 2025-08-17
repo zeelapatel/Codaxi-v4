@@ -48,6 +48,7 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { RepoFilters } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
+import { getLanguageAbbreviation } from '@/lib/utils'
 
 export default function ReposPage() {
   const { track } = useAnalyticsStore()
@@ -114,11 +115,11 @@ export default function ReposPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Repository</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Languages</TableHead>
-            <TableHead>Freshness</TableHead>
-            <TableHead>Last Updated</TableHead>
+            <TableHead className="px-4 text-left">Repository</TableHead>
+            <TableHead className="px-2 text-right">Status</TableHead>
+            <TableHead className="px-2 text-right">Languages</TableHead>
+            <TableHead className="px-2 text-right">Freshness</TableHead>
+            <TableHead className="px-2 text-right">Last Updated</TableHead>
             <TableHead className="w-[70px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -167,8 +168,8 @@ export default function ReposPage() {
                   </div>
                 </div>
               </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-2">
                   {getStatusIcon(repo.lastScan?.status)}
                   <Badge 
                     variant="outline" 
@@ -178,11 +179,11 @@ export default function ReposPage() {
                   </Badge>
                 </div>
               </TableCell>
-              <TableCell>
-                <div className="flex gap-1">
+              <TableCell className="text-right">
+                <div className="flex gap-1 justify-end">
                   {repo.languages.slice(0, 3).map((lang) => (
                     <Badge key={lang} variant="secondary" className="text-xs">
-                      {lang.toUpperCase()}
+                      {getLanguageAbbreviation(lang)}
                     </Badge>
                   ))}
                   {repo.languages.length > 3 && (
@@ -192,12 +193,12 @@ export default function ReposPage() {
                   )}
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell className="text-right">
                 <span className={`font-medium ${getFreshnessColor(repo.docsFreshness)}`}>
                   {repo.docsFreshness}%
                 </span>
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
+              <TableCell className="text-right text-sm text-muted-foreground">
                 {formatDistanceToNow(new Date(repo.updatedAt), { addSuffix: true })}
               </TableCell>
               <TableCell>

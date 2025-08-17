@@ -234,6 +234,26 @@ class ApiClient {
     return this.request(`/github/repositories/${repoId}/details`)
   }
 
+  // Get repository by ID
+  async getRepo(repoId: string): Promise<ApiResponse<{
+    id: string
+    owner: string
+    name: string
+    description: string
+    languages: string[]
+    docsFreshness: number
+    lastScan: {
+      status: 'queued' | 'parsing' | 'embedding' | 'generating' | 'completed' | 'error'
+      timestamp: string
+    } | null
+    isFavorite: boolean
+    visibility: 'public' | 'private'
+    defaultBranch: string
+    updatedAt: string
+  }>> {
+    return this.request(`/github/repositories/${repoId}/details`)
+  }
+
   // GitHub account management
   async disconnectGitHubAccount(): Promise<ApiResponse> {
     return this.request('/github/account', {

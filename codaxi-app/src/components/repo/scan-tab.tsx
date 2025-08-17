@@ -238,7 +238,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.filesParsed}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.filesParsed || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Source files analyzed
               </p>
@@ -251,7 +251,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <Code className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.endpointsDetected}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.endpointsDetected || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Routes discovered
               </p>
@@ -264,7 +264,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <Zap className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.eventsDetected}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.eventsDetected || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Event handlers found
               </p>
@@ -277,7 +277,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <Hash className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.typesDetected}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.typesDetected || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Type definitions
               </p>
