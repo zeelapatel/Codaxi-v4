@@ -204,3 +204,26 @@ model GitHubWebhook {
   
   @@map("github_webhooks")
 }
+
+// Persisted scans and metrics
+model Scan {
+  id                String   @id @default(cuid())
+  repositoryId      String
+  branch            String
+  status            String
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  filesParsed       Int      @default(0)
+  endpointsDetected Int      @default(0)
+  eventsDetected    Int      @default(0)
+  typesDetected     Int      @default(0)
+  tokensUsed        Int      @default(0)
+  durationSec       Int      @default(0)
+  errors            Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([repositoryId])
+  @@map("scans")
+}

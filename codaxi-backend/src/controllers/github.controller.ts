@@ -492,10 +492,36 @@ export class GitHubController {
         repo
       )
 
-      // Get last scan status (mock for now)
-      const lastScan = {
-        status: 'completed' as const,
-        timestamp: new Date().toISOString()
+      // Get last scan status from DB if available; fallback to in-memory, or null
+      let lastScan: { id?: string; status: string; timestamp: string } | null = null
+      try {
+        // @ts-ignore - prisma client may not have scan if generate hasn't run yet
+        const lastScanRow = await (prisma as any).scan.findFirst({
+          where: { repositoryId: connection.repositoryId },
+          orderBy: { updatedAt: 'desc' }
+        })
+        if (lastScanRow) {
+          lastScan = {
+            id: lastScanRow.id,
+            status: lastScanRow.status,
+            timestamp: (lastScanRow.completedAt || lastScanRow.startedAt).toISOString()
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+      if (!lastScan) {
+        try {
+          const { getInMemoryScanForRepo } = await import('./scan.controller')
+          const inMem = getInMemoryScanForRepo?.(connection.repositoryId) as any
+          if (inMem) {
+            lastScan = {
+              id: inMem.id,
+              status: inMem.status,
+              timestamp: (inMem.completedAt || inMem.startedAt)
+            }
+          }
+        } catch {}
       }
 
       // Calculate docs freshness (mock for now)

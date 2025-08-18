@@ -216,6 +216,55 @@ class ApiClient {
     return this.request<GitHubConnectedRepositoriesResponse>('/github/repositories/connected')
   }
 
+  // Scans
+  async startScan(
+    repoId: string,
+    branch?: string
+  ): Promise<ApiResponse<{
+    id: string
+    repoId: string
+    branch: string
+    status: 'queued' | 'parsing' | 'embedding' | 'generating' | 'completed' | 'error'
+    startedAt: string
+    completedAt?: string
+    metrics: {
+      filesParsed: number
+      endpointsDetected: number
+      eventsDetected: number
+      typesDetected: number
+      tokensUsed: number
+      durationSec: number
+    }
+    errors?: Array<{ stage: string; message: string }>
+  }>> {
+    return this.request('/scans', {
+      method: 'POST',
+      body: JSON.stringify({ repoId, branch })
+    })
+  }
+
+  async getScan(
+    scanId: string
+  ): Promise<ApiResponse<{
+    id: string
+    repoId: string
+    branch: string
+    status: 'queued' | 'parsing' | 'embedding' | 'generating' | 'completed' | 'error'
+    startedAt: string
+    completedAt?: string
+    metrics: {
+      filesParsed: number
+      endpointsDetected: number
+      eventsDetected: number
+      typesDetected: number
+      tokensUsed: number
+      durationSec: number
+    }
+    errors?: Array<{ stage: string; message: string }>
+  }>> {
+    return this.request(`/scans/${scanId}`)
+  }
+
   // Repository details with scan status
   async getRepositoryDetails(repoId: string): Promise<ApiResponse<{
     id: string
@@ -225,6 +274,7 @@ class ApiClient {
     languages: string[]
     docsFreshness: number
     lastScan: {
+      id?: string
       status: 'queued' | 'parsing' | 'embedding' | 'generating' | 'completed' | 'error'
       timestamp: string
     } | null

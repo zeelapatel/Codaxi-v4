@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiClient } from './api-client'
+import { apiClient as realApiClient } from './api-client'
+import { apiClient as mockApiClient } from './api'
 import { RepoFilters, AddRepoForm, AskQuestionForm } from '@/types'
 
 // Query Keys
@@ -36,7 +37,7 @@ export const useRepos = (filters?: RepoFilters) => {
       const repoDetails = await Promise.all(
         connectedRepos.data.connections.map(async (conn) => {
           try {
-            const details = await apiClient.getRepositoryDetails(conn.repositoryId)
+            const details = await realApiClient.getRepositoryDetails(conn.repositoryId)
             return details.data
           } catch (error) {
             console.error(`Error fetching details for ${conn.githubRepoFullName}:`, error)
@@ -51,15 +52,28 @@ export const useRepos = (filters?: RepoFilters) => {
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
-    enabled: !!connectedRepos?.data?.connections
+    enabled: !!connectedRepos?.data?.connections,
+    refetchInterval: (query) => {
+      const reposList = (query.state.data as any)?.data || []
+      const hasActive = reposList.some((r: any) => r?.lastScan && ['queued', 'parsing', 'embedding', 'generating'].includes(r.lastScan.status))
+      return hasActive ? 2000 : false
+    },
+    refetchOnWindowFocus: true
   })
 }
 
 export const useRepo = (id: string) => {
   return useQuery({
     queryKey: queryKeys.repo(id),
-    queryFn: () => apiClient.getRepo(id),
+    queryFn: () => realApiClient.getRepo(id),
     staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchInterval: (query) => {
+      const status = (query.state.data as any)?.data?.lastScan?.status
+      return status && ['queued', 'parsing', 'embedding', 'generating'].includes(status) 
+        ? 2000 
+        : false
+    },
+    refetchOnWindowFocus: true
   })
 }
 
@@ -67,7 +81,7 @@ export const useCreateRepo = () => {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (data: AddRepoForm) => apiClient.createRepo(data),
+    mutationFn: (data: AddRepoForm) => mockApiClient.createRepo(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repos })
     },
@@ -78,11 +92,11 @@ export const useCreateRepo = () => {
 export const useScan = (scanId: string) => {
   return useQuery({
     queryKey: queryKeys.scan(scanId),
-    queryFn: () => apiClient.getScan(scanId),
+    queryFn: () => realApiClient.getScan(scanId),
     enabled: !!scanId,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Only refetch if scan is in progress
-      const status = data?.data?.status
+      const status = (query.state.data as any)?.data?.status
       return status && ['queued', 'parsing', 'embedding', 'generating'].includes(status) 
         ? 2000 // 2 seconds
         : false
@@ -95,10 +109,12 @@ export const useStartScan = () => {
   
   return useMutation({
     mutationFn: ({ repoId, branch }: { repoId: string; branch?: string }) => 
-      apiClient.startScan(repoId, branch),
+      realApiClient.startScan(repoId, branch),
     onSuccess: (data) => {
-      const { repoId } = data.data
-      queryClient.invalidateQueries({ queryKey: queryKeys.repo(repoId) })
+      const repoId = data.data?.repoId
+      if (repoId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.repo(repoId) })
+      }
       queryClient.invalidateQueries({ queryKey: queryKeys.repos })
     },
   })
@@ -108,7 +124,7 @@ export const useStartScan = () => {
 export const useDocs = (repoId: string, query?: string) => {
   return useQuery({
     queryKey: queryKeys.docs(repoId, query),
-    queryFn: () => apiClient.getDocs(repoId, query),
+    queryFn: () => mockApiClient.getDocs(repoId, query),
     staleTime: 10 * 60 * 1000, // 10 minutes
   })
 }
@@ -116,7 +132,7 @@ export const useDocs = (repoId: string, query?: string) => {
 export const useDoc = (repoId: string, docId: string) => {
   return useQuery({
     queryKey: queryKeys.doc(repoId, docId),
-    queryFn: () => apiClient.getDoc(repoId, docId),
+    queryFn: () => mockApiClient.getDoc(repoId, docId),
     staleTime: 15 * 60 * 1000, // 15 minutes
   })
 }
@@ -124,7 +140,7 @@ export const useDoc = (repoId: string, docId: string) => {
 export const useSearchDocs = (repoId: string, query: string) => {
   return useQuery({
     queryKey: ['search-docs', repoId, query],
-    queryFn: () => apiClient.searchDocs(repoId, query),
+    queryFn: () => mockApiClient.searchDocs(repoId, query),
     enabled: query.length > 2, // Only search if query is longer than 2 chars
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -134,7 +150,7 @@ export const useSearchDocs = (repoId: string, query: string) => {
 export const useQAThreads = (repoId: string) => {
   return useQuery({
     queryKey: queryKeys.qaThreads(repoId),
-    queryFn: () => apiClient.getQAThreads(repoId),
+    queryFn: () => mockApiClient.getQAThreads(repoId),
     staleTime: 2 * 60 * 1000, // 2 minutes
   })
 }
@@ -142,7 +158,7 @@ export const useQAThreads = (repoId: string) => {
 export const useQAThread = (threadId: string) => {
   return useQuery({
     queryKey: queryKeys.qaThread(threadId),
-    queryFn: () => apiClient.getQAThread(threadId),
+    queryFn: () => mockApiClient.getQAThread(threadId),
     staleTime: 30 * 1000, // 30 seconds (more frequent for active conversations)
   })
 }
@@ -152,7 +168,7 @@ export const useAskQuestion = () => {
   
   return useMutation({
     mutationFn: ({ repoId, data }: { repoId: string; data: AskQuestionForm }) => 
-      apiClient.askQuestion(repoId, data),
+      mockApiClient.askQuestion(repoId, data),
     onSuccess: (data) => {
       const { repoId } = data.data
       queryClient.invalidateQueries({ queryKey: queryKeys.qaThreads(repoId) })
@@ -164,7 +180,7 @@ export const useAskQuestion = () => {
 export const useChangelog = (repoId: string, fromSha?: string, toSha?: string) => {
   return useQuery({
     queryKey: queryKeys.changelog(repoId, fromSha, toSha),
-    queryFn: () => apiClient.getChangelog(repoId, fromSha, toSha),
+    queryFn: () => mockApiClient.getChangelog(repoId, fromSha, toSha),
     staleTime: 10 * 60 * 1000, // 10 minutes
   })
 }
@@ -173,7 +189,7 @@ export const useChangelog = (repoId: string, fromSha?: string, toSha?: string) =
 export const useGraph = (repoId: string) => {
   return useQuery({
     queryKey: queryKeys.graph(repoId),
-    queryFn: () => apiClient.getGraph(repoId),
+    queryFn: () => mockApiClient.getGraph(repoId),
     staleTime: 15 * 60 * 1000, // 15 minutes
   })
 }
@@ -214,7 +230,7 @@ export const useActivity = () => {
 export const useBillingUsage = () => {
   return useQuery({
     queryKey: queryKeys.billing,
-    queryFn: () => apiClient.getBillingUsage(),
+    queryFn: () => mockApiClient.getBillingUsage(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }
@@ -223,7 +239,7 @@ export const useBillingUsage = () => {
 export const useCurrentUser = () => {
   return useQuery({
     queryKey: queryKeys.user,
-    queryFn: () => apiClient.getCurrentUser(),
+    queryFn: () => mockApiClient.getCurrentUser(),
     staleTime: 10 * 60 * 1000, // 10 minutes
   })
 }
@@ -231,7 +247,7 @@ export const useCurrentUser = () => {
 export const useOrganization = () => {
   return useQuery({
     queryKey: queryKeys.organization,
-    queryFn: () => apiClient.getOrganization(),
+    queryFn: () => mockApiClient.getOrganization(),
     staleTime: 10 * 60 * 1000, // 10 minutes
   })
 }
@@ -240,7 +256,7 @@ export const useOrganization = () => {
 export const useGitHubRepositories = () => {
   return useQuery({
     queryKey: queryKeys.githubRepos,
-    queryFn: () => apiClient.getGitHubRepositories(),
+    queryFn: () => realApiClient.getGitHubRepositories(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }
@@ -248,7 +264,7 @@ export const useGitHubRepositories = () => {
 export const useConnectedRepositories = () => {
   return useQuery({
     queryKey: queryKeys.connectedRepos,
-    queryFn: () => apiClient.getConnectedRepositories(),
+    queryFn: () => realApiClient.getConnectedRepositories(),
     staleTime: 2 * 60 * 1000, // 2 minutes
   })
 }
@@ -258,7 +274,7 @@ export const useConnectRepository = () => {
   
   return useMutation({
     mutationFn: ({ owner, repo }: { owner: string; repo: string }) => 
-      apiClient.connectGitHubRepository(owner, repo),
+      realApiClient.connectGitHubRepository(owner, repo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.connectedRepos })
       queryClient.invalidateQueries({ queryKey: queryKeys.repos })
@@ -271,7 +287,7 @@ export const useDisconnectRepository = () => {
   
   return useMutation({
     mutationFn: (connectionId: string) => 
-      apiClient.disconnectGitHubRepository(connectionId),
+      realApiClient.disconnectGitHubRepository(connectionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.connectedRepos })
       queryClient.invalidateQueries({ queryKey: queryKeys.repos })

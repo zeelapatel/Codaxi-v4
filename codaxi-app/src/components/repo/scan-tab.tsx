@@ -36,6 +36,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
   const [currentScanId, setCurrentScanId] = useState<string | null>(
     repo.lastScan?.id || null
   )
+  const storageKey = `codaxi:lastScanId:${repoId}`
   
   const { data: currentScan, isLoading: scanLoading } = useScan(
     currentScanId || ''
@@ -43,6 +44,14 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
 
   // Listen for scan progress events
   useEffect(() => {
+    // Resume from localStorage if repo details didn't include lastScan
+    if (!currentScanId && typeof window !== 'undefined') {
+      const savedId = localStorage.getItem(storageKey)
+      if (savedId) {
+        setCurrentScanId(savedId)
+      }
+    }
+
     const handleScanProgress = (event: CustomEvent) => {
       if (event.detail.scanId === currentScanId) {
         // The query will automatically refetch due to refetchInterval
@@ -60,6 +69,11 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
       track('start_scan', { repoId })
       const result = await startScanMutation.mutateAsync({ repoId })
       setCurrentScanId(result.data.id)
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(storageKey, result.data.id)
+        }
+      } catch {}
       toast.success('Scan started successfully')
     } catch (error) {
       toast.error('Failed to start scan')
@@ -113,6 +127,8 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
         return <Clock className={className} />
     }
   }
+
+  // Keep last scan id in storage so completed scans are shown after navigation
 
   return (
     <div className="space-y-6">

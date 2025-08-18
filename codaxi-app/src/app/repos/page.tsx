@@ -46,7 +46,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect } from 'react'
-import { RepoFilters } from '@/types'
+import { RepoFilters, Repo } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import { getLanguageAbbreviation } from '@/lib/utils'
 
@@ -110,7 +110,10 @@ export default function ReposPage() {
     return 'text-red-600'
   }
 
-  const TableView = () => (
+  const TableView = () => {
+    const safeRepos: Repo[] = ((repos?.data ?? []) as Array<Repo | null>)
+      .filter((r): r is Repo => Boolean(r))
+    return (
     <Card>
       <Table>
         <TableHeader>
@@ -143,7 +146,7 @@ export default function ReposPage() {
                 <TableCell><Skeleton className="w-8 h-8" /></TableCell>
               </TableRow>
             ))
-          ) : repos?.data.map((repo) => (
+          ) : safeRepos.map((repo) => (
             <TableRow key={repo.id}>
               <TableCell>
                 <div className="flex items-center gap-3">
@@ -285,9 +288,12 @@ export default function ReposPage() {
                     </div>
        )}
     </Card>
-  )
+  )}
 
-  const GridView = () => (
+  const GridView = () => {
+    const safeRepos: Repo[] = ((repos?.data ?? []) as Array<Repo | null>)
+      .filter((r): r is Repo => Boolean(r))
+    return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {isLoading ? (
         [...Array(6)].map((_, i) => (
@@ -310,7 +316,7 @@ export default function ReposPage() {
             </CardContent>
           </Card>
         ))
-      ) : repos?.data.map((repo) => (
+      ) : safeRepos.map((repo) => (
         <Card key={repo.id} className="hover:shadow-md transition-shadow">
           <CardHeader>
             <div className="flex items-start justify-between">
@@ -426,7 +432,7 @@ export default function ReposPage() {
                     </div>
        )}
     </div>
-  )
+  )}
 
   return (
     <AppShell>
