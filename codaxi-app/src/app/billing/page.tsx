@@ -98,10 +98,10 @@ export default function BillingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {usage?.data.reposScanned || 0} / {usage?.data.maxRepos || 0}
+                {(usage?.data?.reposScanned ?? 0)} / {(usage?.data?.maxRepos ?? 0)}
               </div>
               <Progress 
-                value={(usage?.data.reposScanned / usage?.data.maxRepos * 100) || 0} 
+                value={((usage?.data?.reposScanned ?? 0) / ((usage?.data?.maxRepos ?? 0) || 1) * 100)} 
                 className="mt-2"
               />
             </CardContent>
@@ -114,13 +114,13 @@ export default function BillingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {usage?.data.tokensUsed.toLocaleString() || 0}
+                {usage?.data?.tokensUsed?.toLocaleString() ?? '0'}
               </div>
               <div className="text-xs text-muted-foreground">
-                of {usage?.data.maxTokens.toLocaleString() || 0} this month
+                of {usage?.data?.maxTokens?.toLocaleString() ?? '0'} this month
               </div>
               <Progress 
-                value={(usage?.data.tokensUsed / usage?.data.maxTokens * 100) || 0} 
+                value={((usage?.data?.tokensUsed ?? 0) / ((usage?.data?.maxTokens ?? 0) || 1) * 100)} 
                 className="mt-2"
               />
             </CardContent>
@@ -132,7 +132,7 @@ export default function BillingPage() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{usage?.data.daysRemaining || 0}</div>
+              <div className="text-2xl font-bold">{usage?.data?.daysRemaining ?? 0}</div>
               <div className="text-xs text-muted-foreground">
                 days remaining
               </div>
