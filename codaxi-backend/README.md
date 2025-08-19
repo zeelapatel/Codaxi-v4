@@ -117,8 +117,11 @@ createdb codaxi_db
 # Update DATABASE_URL in .env file
 # Example: postgresql://username:password@localhost:5432/codaxi_db
 
-# Run database migrations
-npm run db:push
+# Apply migrations
+npx prisma migrate deploy
+
+# Generate Prisma client
+npx prisma generate
 
 # Optional: Seed the database
 npm run db:seed
@@ -133,6 +136,11 @@ JWT_EXPIRES_IN="7d"
 PORT=5000
 NODE_ENV="development"
 FRONTEND_URL="http://localhost:3000"
+OPENAI_API_KEY="sk-..."
+OPENAI_API_URL="https://api.openai.com/v1/chat/completions"
+OPENAI_MODEL="gpt-4o-mini"
+LLM_TIMEOUT_MS=15000
+LLM_MAX_RETRIES=2
 ```
 
 ### 4. Development

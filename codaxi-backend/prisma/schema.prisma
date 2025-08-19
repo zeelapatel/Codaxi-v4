@@ -12,6 +12,7 @@ datasource db {
 
 enum UserRole {
   ADMIN
+  EDITOR
   MEMBER
   VIEWER
 }
@@ -173,6 +174,11 @@ model GitHubRepositoryConnection {
   // Status
   isActive          Boolean  @default(true)
   lastSyncAt        DateTime?
+  // Cached details to avoid repeated GitHub API calls
+  cachedRepo        Json?
+  cachedLanguages   Json?
+  tarballFilePath   String?
+  tarballUpdatedAt  DateTime?
   
   // Timestamps
   createdAt         DateTime @default(now())
@@ -226,4 +232,53 @@ model Scan {
 
   @@index([repositoryId])
   @@map("scans")
+}
+
+// Documentation nodes produced by scans
+model DocNode {
+  id            String   @id @default(cuid())
+  repositoryId  String
+  scanId        String?
+  kind          String   // route | event | type | module | function | class
+  path          String   // e.g. /api/orders or file path symbol path
+  title         String
+  summary       String?
+  citations     Json?
+  html          String?
+  parentId      String?
+  metadata      Json?
+
+  // API schema fields (for route docs)
+  params           Json?
+  requestSchema    Json?
+  requestExample   Json?
+  responses        Json?
+  errors           Json?
+
+  // Versioning
+  schemaVersion    Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([repositoryId])
+  @@index([scanId])
+  @@map("doc_nodes")
+}
+
+// Historical versions of API schemas for a DocNode
+model DocSchemaVersion {
+  id           String   @id @default(cuid())
+  docNodeId    String
+  version      Int
+  params           Json?
+  requestSchema    Json?
+  requestExample   Json?
+  responses        Json?
+  errors           Json?
+  createdByUserId  String?
+  createdAt     DateTime @default(now())
+
+  @@index([docNodeId, version])
+  @@map("doc_schema_versions")
 }

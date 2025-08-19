@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useStartScan, useScan } from '@/lib/queries'
+import { useStartScan, useScan, useCancelScan, queryKeys } from '@/lib/queries'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAnalyticsStore } from '@/lib/store'
 import { Repo, Scan } from '@/types'
 import { 
@@ -33,6 +34,8 @@ interface ScanTabProps {
 export function ScanTab({ repoId, repo }: ScanTabProps) {
   const { track } = useAnalyticsStore()
   const startScanMutation = useStartScan()
+  const cancelScanMutation = useCancelScan()
+  const queryClient = useQueryClient()
   const [currentScanId, setCurrentScanId] = useState<string | null>(
     repo.lastScan?.id || null
   )
@@ -42,7 +45,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
     currentScanId || ''
   )
 
-  // Listen for scan progress events
+  // Listen via SSE instead of polling
   useEffect(() => {
     // Resume from localStorage if repo details didn't include lastScan
     if (!currentScanId && typeof window !== 'undefined') {
@@ -51,17 +54,25 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
         setCurrentScanId(savedId)
       }
     }
+  }, [])
 
-    const handleScanProgress = (event: CustomEvent) => {
-      if (event.detail.scanId === currentScanId) {
-        // The query will automatically refetch due to refetchInterval
-      }
+  useEffect(() => {
+    if (!currentScanId) return
+    const es = new EventSource(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/scans/${currentScanId}/stream`, { withCredentials: true } as any)
+    const onMessage = (evt: MessageEvent) => {
+      try {
+        const data = JSON.parse(evt.data)
+        if (data?.scanId === currentScanId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.scan(currentScanId) })
+        }
+      } catch {}
     }
-
-    window.addEventListener('scan-progress', handleScanProgress as EventListener)
-    return () => {
-      window.removeEventListener('scan-progress', handleScanProgress as EventListener)
+    es.addEventListener('message', onMessage)
+    es.onmessage = onMessage
+    es.onerror = () => {
+      es.close()
     }
+    return () => { es.close() }
   }, [currentScanId])
 
   const handleStartScan = async () => {
@@ -161,8 +172,16 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
                 )}
               </Button>
               
-              {isScanning && (
-                <Button variant="outline" size="sm">
+              {isScanning && currentScanId && (
+                <Button variant="outline" size="sm" disabled={cancelScanMutation.isPending} onClick={async () => {
+                  try {
+                    await cancelScanMutation.mutateAsync(currentScanId)
+                    toast.success('Cancel requested')
+                    queryClient.invalidateQueries({ queryKey: queryKeys.scan(currentScanId) })
+                  } catch {
+                    toast.error('Failed to cancel')
+                  }
+                }}>
                   <Square className="w-4 h-4" />
                   Cancel
                 </Button>

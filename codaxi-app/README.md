@@ -1,3 +1,23 @@
+## Docs Editor and Scan Streaming
+
+### Configure API base URL
+
+Set `NEXT_PUBLIC_API_BASE_URL` in `.env.local`:
+
+```
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api
+```
+
+### Docs editor
+
+- Open a repository → Docs tab
+- Select a route node
+- Click "Generate Examples (AI)" to preview and save generated schema
+- Only users with `ADMIN` or `EDITOR` role can save
+
+### Scan streaming (SSE)
+
+The Scan tab connects to `GET /api/scans/:id/stream` via SSE to receive progress updates.
 # Codaxi - AI-Powered Documentation Generator
 
 A modern, production-quality web application for real-time, RAG-powered documentation generation from codebases.

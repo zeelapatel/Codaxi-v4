@@ -42,6 +42,8 @@ const response_1 = require("../utils/response");
 const config_1 = require("../config");
 const client_1 = require("@prisma/client");
 const crypto_1 = __importDefault(require("crypto"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const prisma = new client_1.PrismaClient();
 // Initialize GitHub service with config
 const githubService = new github_service_1.GitHubService({
@@ -200,24 +202,9 @@ class GitHubController {
                 count: connectedRepoIds.size,
                 ids: Array.from(connectedRepoIds)
             });
-            // Filter out already connected repositories and get additional details
-            console.log('[GitHubController] Filtering and enriching repositories');
-            const availableRepos = await Promise.all(repositories
-                .filter(repo => !connectedRepoIds.has(repo.id))
-                .map(async (repo) => {
-                try {
-                    // Get languages for each repository
-                    const languages = await githubService.getRepositoryLanguages(connection.accessToken, repo.full_name.split('/')[0], repo.name);
-                    return {
-                        ...repo,
-                        languages: Object.keys(languages)
-                    };
-                }
-                catch (error) {
-                    console.error(`Error fetching languages for ${repo.full_name}:`, error);
-                    return repo;
-                }
-            }));
+            // Filter out already connected repositories; avoid extra per-repo GitHub calls here
+            console.log('[GitHubController] Filtering repositories without enrichment to limit API usage');
+            const availableRepos = repositories.filter(repo => !connectedRepoIds.has(repo.id));
             (0, response_1.sendSuccess)(res, { repositories: availableRepos }, 'GitHub repositories retrieved successfully');
         }
         catch (error) {
@@ -250,7 +237,7 @@ class GitHubController {
             if (!hasAccess) {
                 return (0, response_1.sendError)(res, 'No access to this repository', 403);
             }
-            // Get repository details
+            // Get repository details once and cache for future
             const repository = await githubService.getRepository(connection.accessToken, owner, repo);
             // Check if repository is already connected
             const existingConnection = await prisma.gitHubRepositoryConnection.findFirst({
@@ -270,9 +257,31 @@ class GitHubController {
                     githubRepoId: repository.id,
                     githubRepoName: repository.name,
                     githubRepoFullName: repository.full_name,
-                    isActive: true
+                    isActive: true,
+                    cachedRepo: repository
                 }
             });
+            // Download tarball once and cache to disk
+            try {
+                const storageDir = path_1.default.join(process.cwd(), 'storage', 'repos');
+                fs_1.default.mkdirSync(storageDir, { recursive: true });
+                const tarballPath = path_1.default.join(storageDir, `${repoConnection.repositoryId}.tar.gz`);
+                const tarStream = await githubService.downloadTarball(connection.accessToken, owner, repo, repository.default_branch || 'main');
+                await new Promise((resolve, reject) => {
+                    const ws = fs_1.default.createWriteStream(tarballPath);
+                    tarStream.pipe(ws);
+                    ws.on('finish', () => resolve());
+                    ws.on('error', reject);
+                    tarStream.on('error', reject);
+                });
+                await prisma.gitHubRepositoryConnection.update({
+                    where: { id: repoConnection.id },
+                    data: { tarballFilePath: tarballPath, tarballUpdatedAt: new Date() }
+                });
+            }
+            catch (e) {
+                console.warn('Failed to cache tarball on connect:', e);
+            }
             // Create webhook for the repository
             try {
                 const webhookUrl = `${config_1.config.server.baseUrl}/api/github/webhook`;
@@ -380,25 +389,13 @@ class GitHubController {
                     }
                 }
             });
-            // Get additional details for each repository
-            const reposWithDetails = await Promise.all(connections.map(async (conn) => {
-                try {
-                    const repo = await githubService.getRepository(conn.githubConnection.accessToken, conn.githubRepoFullName.split('/')[0], conn.githubRepoFullName.split('/')[1]);
-                    const languages = await githubService.getRepositoryLanguages(conn.githubConnection.accessToken, conn.githubRepoFullName.split('/')[0], conn.githubRepoFullName.split('/')[1]);
-                    return {
-                        ...conn,
-                        repository: {
-                            ...repo,
-                            languages: Object.keys(languages)
-                        }
-                    };
-                }
-                catch (error) {
-                    console.error(`Error fetching details for ${conn.githubRepoFullName}:`, error);
-                    return conn;
-                }
+            // Return cached details only (no GitHub calls)
+            const data = connections.map((c) => ({
+                ...c,
+                repository: c.cachedRepo || null,
+                languages: c.cachedLanguages ? Object.keys(c.cachedLanguages) : []
             }));
-            (0, response_1.sendSuccess)(res, { connections: reposWithDetails }, 'Connected repositories retrieved successfully');
+            (0, response_1.sendSuccess)(res, { connections: data }, 'Connected repositories retrieved successfully');
         }
         catch (error) {
             console.error('Error getting connected repositories:', error);

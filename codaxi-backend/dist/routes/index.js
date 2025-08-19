@@ -7,6 +7,7 @@ const express_1 = require("express");
 const auth_1 = __importDefault(require("./auth"));
 const github_1 = __importDefault(require("./github"));
 const scan_1 = __importDefault(require("./scan"));
+const docs_1 = __importDefault(require("./docs"));
 const security_1 = require("../middleware/security");
 const router = (0, express_1.Router)();
 // Health check endpoint
@@ -33,5 +34,6 @@ if (process.env.NODE_ENV === 'development') {
 router.use('/auth', auth_1.default);
 router.use('/github', github_1.default);
 router.use('/', scan_1.default);
+router.use('/', docs_1.default);
 exports.default = router;
 //# sourceMappingURL=index.js.map

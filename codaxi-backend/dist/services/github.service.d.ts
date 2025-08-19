@@ -3,6 +3,8 @@ export declare class GitHubService {
     private apiClient;
     private oauthConfig;
     constructor(oauthConfig: GitHubOAuthConfig);
+    /** Download repository tarball for a given ref (branch or commit SHA) */
+    downloadTarball(accessToken: string, owner: string, repo: string, ref: string): Promise<NodeJS.ReadableStream>;
     /**
      * Generate OAuth authorization URL
      */

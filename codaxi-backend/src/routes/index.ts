@@ -2,6 +2,7 @@ import { Router } from 'express'
 import authRoutes from './auth'
 import githubRoutes from './github'
 import scanRoutes from './scan'
+import docsRoutes from './docs'
 import { clearRateLimit } from '../middleware/security'
 
 const router = Router()
@@ -32,5 +33,6 @@ if (process.env.NODE_ENV === 'development') {
 router.use('/auth', authRoutes)
 router.use('/github', githubRoutes)
 router.use('/', scanRoutes)
+router.use('/', docsRoutes)
 
 export default router

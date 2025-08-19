@@ -1,10 +1,26 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ScanController = exports.getInMemoryScanForRepo = void 0;
 const response_1 = require("../utils/response");
 const github_service_1 = require("../services/github.service");
 const config_1 = require("../config");
 const database_1 = require("../utils/database");
+const doc_extractor_1 = require("../services/doc-extractor");
+const events_1 = require("../utils/events");
+const fs_1 = __importDefault(require("fs"));
+const os_1 = __importDefault(require("os"));
+const path_1 = __importDefault(require("path"));
+const tar_1 = __importDefault(require("tar"));
+const doc_extractor_java_1 = require("../services/doc-extractor-java");
+function escapeHtml(s) {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
 /**
  * A very simple in-memory scan manager that simulates progressive metrics updates.
  * This replaces a real job queue for now.
@@ -123,6 +139,11 @@ class InMemoryScanManager {
         }
         catch { }
         this.scans.set(scanId, current);
+        // Emit progress event
+        try {
+            events_1.appEvents.emit('scan-progress', { scanId, scan: current });
+        }
+        catch { }
     }
     async runScan(scanId) {
         const scan = this.scans.get(scanId);
@@ -145,31 +166,45 @@ class InMemoryScanManager {
         }
         const accessToken = connection.githubConnection.accessToken;
         const [owner, repo] = connection.githubRepoFullName.split('/');
-        // Determine target branch
-        const repoDetails = await this.githubService.getRepository(accessToken, owner, repo);
-        const targetBranch = scan.branch || repoDetails.default_branch || 'main';
-        // Get head commit to obtain tree SHA
-        const commits = await this.githubService.getRepositoryCommits(accessToken, owner, repo, targetBranch);
-        if (!commits || commits.length === 0) {
-            throw new Error('No commits found on target branch');
+        // Prepare local extraction dir
+        const tmpDir = fs_1.default.mkdtempSync(path_1.default.join(os_1.default.tmpdir(), `codaxi-${scan.repoId}-`));
+        // Prefer cached tarball if available to avoid GitHub API
+        let tarStream;
+        if (connection.tarballFilePath && fs_1.default.existsSync(connection.tarballFilePath)) {
+            tarStream = fs_1.default.createReadStream(connection.tarballFilePath);
         }
-        const treeSha = commits[0]?.commit?.tree?.sha;
-        if (!treeSha) {
-            throw new Error('Unable to resolve tree SHA');
+        else {
+            // Fallback: one-time download
+            const repoDetails = await this.githubService.getRepository(accessToken, owner, repo);
+            const targetBranch = scan.branch || repoDetails.default_branch || 'main';
+            tarStream = await this.githubService.downloadTarball(accessToken, owner, repo, targetBranch);
         }
-        // Get repository tree recursively
-        const tree = await this.githubService.getRepositoryTree(accessToken, owner, repo, treeSha, true);
-        const entries = tree?.tree || [];
-        const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.java', '.rs', '.cpp', '.c', '.cs']);
-        const isCodeFile = (path) => {
-            const lower = path.toLowerCase();
-            return Array.from(codeExtensions).some(ext => lower.endsWith(ext));
-        };
-        const codeFiles = entries.filter(e => e.type === 'blob' && isCodeFile(e.path));
-        this.updateScan(scanId, {
-            status: 'parsing',
-            metrics: { filesParsed: codeFiles.length }
+        await new Promise((resolve, reject) => {
+            tarStream
+                .pipe(tar_1.default.x({ cwd: tmpDir }))
+                .on('finish', () => resolve())
+                .on('error', reject);
         });
+        // Find single top-level folder created by GitHub tarball
+        const [rootFolder] = fs_1.default.readdirSync(tmpDir);
+        const repoRoot = path_1.default.join(tmpDir, rootFolder);
+        const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.java', '.py', '.go', '.rs', '.cpp', '.c', '.cs']);
+        const isCodeFile = (p) => Array.from(codeExtensions).some(ext => p.toLowerCase().endsWith(ext));
+        // Walk files
+        const allFiles = [];
+        const stack = [repoRoot];
+        while (stack.length) {
+            const dir = stack.pop();
+            for (const entry of fs_1.default.readdirSync(dir, { withFileTypes: true })) {
+                const full = path_1.default.join(dir, entry.name);
+                if (entry.isDirectory())
+                    stack.push(full);
+                else
+                    allFiles.push(full);
+            }
+        }
+        const codeFiles = allFiles.filter(isCodeFile);
+        this.updateScan(scanId, { status: 'parsing', metrics: { filesParsed: codeFiles.length } });
         // Phase 2: embedding (fetch contents and compute primary metrics)
         this.updateScan(scanId, { status: 'embedding' });
         let endpointsDetected = 0;
@@ -177,14 +212,11 @@ class InMemoryScanManager {
         let typesDetected = 0;
         let tokensUsed = 0;
         const MAX_FILES = 400;
+        const extractedDocs = [];
         for (let i = 0; i < Math.min(codeFiles.length, MAX_FILES); i++) {
-            const file = codeFiles[i];
+            const filePath = codeFiles[i];
             try {
-                const contentRes = await this.githubService.getFileContent(accessToken, owner, repo, file.path, targetBranch);
-                let text = '';
-                if (contentRes.content && contentRes.encoding === 'base64') {
-                    text = Buffer.from(contentRes.content, 'base64').toString('utf-8');
-                }
+                const text = fs_1.default.readFileSync(filePath, 'utf-8');
                 const routeRegex = /(router|app)\.(get|post|put|delete|patch|options|head)\(\s*['"`](.*?)['"`]/gi;
                 const eventRegex = /\.(emit|on)\(\s*['"`](.*?)['"`]/gi;
                 const tsTypeRegex = /export\s+(interface|type)\s+\w+/g;
@@ -205,6 +237,37 @@ class InMemoryScanManager {
                         }
                     });
                 }
+                // Extract docs from source and enrich with summary/html
+                if (text) {
+                    const rel = path_1.default.relative(repoRoot, filePath).replace(/\\/g, '/');
+                    let found = [];
+                    if (/\.(ts|tsx|js|jsx)$/i.test(filePath)) {
+                        found = (0, doc_extractor_1.extractFromSource)(rel, text);
+                    }
+                    else if (/\.java$/i.test(filePath)) {
+                        found = (0, doc_extractor_java_1.extractFromJavaSource)(rel, text);
+                    }
+                    found = found.map((d) => {
+                        let html;
+                        let summary;
+                        try {
+                            if (d.citations && d.citations[0]) {
+                                const { startLine, endLine } = d.citations[0];
+                                const lines = text.split(/\r?\n/);
+                                const snippet = lines.slice(Math.max(0, startLine - 1), Math.min(lines.length, endLine)).join('\n');
+                                html = `<div><p><strong>${(d.metadata?.method || '').toString().toUpperCase()}</strong> ${d.path}</p><pre><code>${escapeHtml(snippet)}</code></pre></div>`;
+                                // attach snippet to first citation for LLM context
+                                d.citations = d.citations.map((c, idx) => idx === 0 ? { ...c, snippet } : c);
+                            }
+                        }
+                        catch { }
+                        if (d.kind === 'route') {
+                            summary = `${(d.metadata?.method || '').toString().toUpperCase()} ${d.path}`.trim();
+                        }
+                        return { ...d, summary, html };
+                    });
+                    extractedDocs.push(...found);
+                }
             }
             catch (e) {
                 continue;
@@ -221,6 +284,36 @@ class InMemoryScanManager {
                 tokensUsed
             }
         });
+        // Persist extracted docs
+        try {
+            if (extractedDocs.length > 0) {
+                // Deduplicate by kind+title+path
+                const seen = new Set();
+                const unique = extractedDocs.filter(d => {
+                    const key = `${d.kind}|${d.title}|${d.path}`;
+                    if (seen.has(key))
+                        return false;
+                    seen.add(key);
+                    return true;
+                });
+                await database_1.db.docNode.createMany({
+                    data: unique.map(d => ({
+                        repositoryId: scan.repoId,
+                        scanId: scan.id,
+                        kind: d.kind,
+                        path: d.path,
+                        title: d.title,
+                        summary: d.summary || null,
+                        citations: d.citations || null,
+                        html: d.html || null,
+                        metadata: d.metadata || null
+                    }))
+                });
+            }
+        }
+        catch (e) {
+            console.warn('Failed to persist extracted doc nodes', e);
+        }
         // Complete
         this.updateScan(scanId, { status: 'completed' });
     }
@@ -288,6 +381,37 @@ class ScanController {
         catch (error) {
             console.error('Error getting scan:', error);
             return (0, response_1.sendError)(res, 'Failed to get scan', 500);
+        }
+    }
+    /**
+     * SSE: stream scan progress
+     */
+    static async streamScan(req, res) {
+        try {
+            const { id } = req.params;
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+            res.flushHeaders?.();
+            const send = (data) => {
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            };
+            const listener = (evt) => {
+                if (evt.scanId === id)
+                    send(evt);
+            };
+            events_1.appEvents.on('scan-progress', listener);
+            // Send initial state
+            const init = scanManager.getScan(id);
+            if (init)
+                send({ scanId: id, scan: init });
+            req.on('close', () => {
+                events_1.appEvents.off('scan-progress', listener);
+                res.end();
+            });
+        }
+        catch (e) {
+            return (0, response_1.sendError)(res, 'Failed to stream scan', 500);
         }
     }
     /**

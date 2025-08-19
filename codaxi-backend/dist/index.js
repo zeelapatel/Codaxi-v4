@@ -39,8 +39,8 @@ else {
 // Request parsing middleware
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
-// Rate limiting
-app.use(security_1.generalRateLimit);
+// Rate limiting is applied per-route in routes/index.ts (GitHub endpoints only),
+// to avoid throttling internal APIs and dev SSE streams
 // Request size limiting
 app.use((0, security_1.requestSizeLimit)());
 // API routes

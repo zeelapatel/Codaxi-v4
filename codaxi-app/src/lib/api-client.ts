@@ -1,5 +1,5 @@
 // Real API client for backend integration
-const API_BASE_URL = 'http://localhost:5000/api'
+const API_BASE_URL = (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:5000/api'
 
 // Import GitHub types
 import {
@@ -9,6 +9,7 @@ import {
   GitHubConnectedRepositoriesResponse,
   GitHubOAuthRequest
 } from '@/types/github'
+import { DocNode } from '@/types'
 
 export interface ApiResponse<T = any> {
   success: boolean
@@ -23,7 +24,7 @@ export interface User {
   email: string
   name: string
   company?: string
-  role: 'ADMIN' | 'MEMBER' | 'VIEWER'
+  role: 'ADMIN' | 'EDITOR' | 'MEMBER' | 'VIEWER'
   avatar?: string
   emailVerified: boolean
   createdAt: string
@@ -263,6 +264,37 @@ class ApiClient {
     errors?: Array<{ stage: string; message: string }>
   }>> {
     return this.request(`/scans/${scanId}`)
+  }
+
+  async cancelScan(scanId: string): Promise<ApiResponse<{ id: string }>> {
+    return this.request(`/scans/${scanId}/cancel`, { method: 'POST' })
+  }
+
+  // Docs
+  async getDocs(repoId: string, query?: string, opts?: { kinds?: string[]; page?: number; pageSize?: number }): Promise<ApiResponse<{ items: DocNode[]; total: number; page: number; pageSize: number }>> {
+    const params = new URLSearchParams()
+    if (query) params.set('q', query)
+    if (opts?.kinds?.length) params.set('kinds', opts.kinds.join(','))
+    if (opts?.page) params.set('page', String(opts.page))
+    if (opts?.pageSize) params.set('pageSize', String(opts.pageSize))
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    return this.request(`/repos/${repoId}/docs${qs}`)
+  }
+
+  async getDoc(repoId: string, docId: string): Promise<ApiResponse<DocNode>> {
+    return this.request<DocNode>(`/repos/${repoId}/docs/${docId}`)
+  }
+
+  async getDocSchema(repoId: string, docId: string): Promise<ApiResponse<{ id: string; metadata?: any; params?: any; requestSchema?: any; requestExample?: any; responses?: any; errors?: any }>> {
+    return this.request(`/repos/${repoId}/docs/${docId}/schema`)
+  }
+
+  async updateDocSchema(repoId: string, docId: string, data: { params?: any; requestSchema?: any; requestExample?: any; responses?: any; errors?: any }): Promise<ApiResponse<{ id: string }>> {
+    return this.request(`/repos/${repoId}/docs/${docId}/schema`, { method: 'PUT', body: JSON.stringify(data) })
+  }
+
+  async generateDocSchema(repoId: string, docId: string): Promise<ApiResponse<any>> {
+    return this.request(`/repos/${repoId}/docs/${docId}/schema:generate`, { method: 'POST' })
   }
 
   // Repository details with scan status

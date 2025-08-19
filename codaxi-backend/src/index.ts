@@ -5,7 +5,7 @@ import morgan from 'morgan'
 import { config, isDevelopment } from './config'
 import { db } from './utils/database'
 import { errorHandler, notFoundHandler } from './middleware/error'
-import { generalRateLimit, requestSizeLimit, corsHeaders } from './middleware/security'
+import { requestSizeLimit, corsHeaders } from './middleware/security'
 import routes from './routes'
 
 // Create Express app
@@ -41,8 +41,8 @@ if (isDevelopment) {
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-// Rate limiting
-app.use(generalRateLimit)
+// Rate limiting is applied per-route in routes/index.ts (GitHub endpoints only),
+// to avoid throttling internal APIs and dev SSE streams
 
 // Request size limiting
 app.use(requestSizeLimit())

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { AppShell } from '@/components/layout/app-shell'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -42,18 +43,23 @@ import {
   Eye,
   Settings,
   BarChart3,
-  Github
+  Github,
+  RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect } from 'react'
 import { RepoFilters, Repo } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
+import { toast } from 'sonner'
 import { getLanguageAbbreviation } from '@/lib/utils'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queries'
 
 export default function ReposPage() {
   const { track } = useAnalyticsStore()
   const { reposViewMode, setReposViewMode } = useUIStore()
   const { isGitHubConnected } = useAuth()
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<RepoFilters>({})
   
@@ -67,6 +73,9 @@ export default function ReposPage() {
   const { data: connectedRepos } = useConnectedRepositories()
   const { mutate: connectRepo, isPending: isConnecting } = useConnectRepository()
   const { mutate: disconnectRepo, isPending: isDisconnecting } = useDisconnectRepository()
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Repo | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
 
   useEffect(() => {
     track('view_repo_list')
@@ -240,9 +249,9 @@ export default function ReposPage() {
                       )}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setDeleteTarget(repo); setDeleteConfirm(''); setDeleteDialogOpen(true) }}>
                       <Settings className="w-4 h-4 mr-2" />
-                      Settings
+                      Delete Connection
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -437,6 +446,44 @@ export default function ReposPage() {
   return (
     <AppShell>
       <div className="p-6 space-y-6">
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-md bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Delete Connection</DialogTitle>
+              <DialogDescription>
+                This action will remove the connection for
+                {` ${deleteTarget?.owner}/${deleteTarget?.name} `}
+                from Codaxi. Type the full repo name to confirm.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                placeholder={`${deleteTarget?.owner}/${deleteTarget?.name}`}
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={!deleteTarget || deleteConfirm !== `${deleteTarget?.owner}/${deleteTarget?.name}` || isDisconnecting}
+                onClick={() => {
+                  if (!deleteTarget) return
+                  const expected = `${deleteTarget.owner}/${deleteTarget.name}`
+                  const conn = (connectedRepos?.data?.connections || []).find((c: any) => c.githubRepoFullName === expected)
+                  if (!conn) { toast.error('Connection not found'); return }
+                  disconnectRepo(conn.id as string)
+                  setDeleteDialogOpen(false)
+                  toast.success('Connection deleted')
+                }}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -487,6 +534,22 @@ export default function ReposPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Refresh repositories"
+            title="Refresh"
+            onClick={async () => {
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: queryKeys.connectedRepos }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.repos })
+              ])
+              toast.success('Repository list refreshed')
+            }}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </Button>
 
           <div className="flex items-center border rounded-lg">
             <Button

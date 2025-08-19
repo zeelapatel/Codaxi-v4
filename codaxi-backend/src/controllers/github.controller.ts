@@ -6,6 +6,8 @@ import { PrismaClient } from '@prisma/client'
 import { authenticate } from '../middleware/auth'
 import { AuthenticatedRequest } from '../types'
 import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
 
 const prisma = new PrismaClient()
 
@@ -185,30 +187,9 @@ export class GitHubController {
         ids: Array.from(connectedRepoIds)
       })
 
-      // Filter out already connected repositories and get additional details
-      console.log('[GitHubController] Filtering and enriching repositories')
-      const availableRepos = await Promise.all(
-        repositories
-          .filter(repo => !connectedRepoIds.has(repo.id))
-          .map(async (repo) => {
-            try {
-              // Get languages for each repository
-              const languages = await githubService.getRepositoryLanguages(
-                connection.accessToken,
-                repo.full_name.split('/')[0],
-                repo.name
-              )
-
-              return {
-                ...repo,
-                languages: Object.keys(languages)
-              }
-            } catch (error) {
-              console.error(`Error fetching languages for ${repo.full_name}:`, error)
-              return repo
-            }
-          })
-      )
+      // Filter out already connected repositories; avoid extra per-repo GitHub calls here
+      console.log('[GitHubController] Filtering repositories without enrichment to limit API usage')
+      const availableRepos = repositories.filter(repo => !connectedRepoIds.has(repo.id))
 
       sendSuccess(res, { repositories: availableRepos }, 'GitHub repositories retrieved successfully')
     } catch (error) {
@@ -252,7 +233,7 @@ export class GitHubController {
         return sendError(res, 'No access to this repository', 403)
       }
 
-      // Get repository details
+      // Get repository details once and cache for future
       const repository = await githubService.getRepository(
         connection.accessToken,
         owner,
@@ -279,9 +260,31 @@ export class GitHubController {
           githubRepoId: repository.id,
           githubRepoName: repository.name,
           githubRepoFullName: repository.full_name,
-          isActive: true
+          isActive: true,
+          cachedRepo: repository as any
         }
       })
+
+      // Download tarball once and cache to disk
+      try {
+        const storageDir = path.join(process.cwd(), 'storage', 'repos')
+        fs.mkdirSync(storageDir, { recursive: true })
+        const tarballPath = path.join(storageDir, `${repoConnection.repositoryId}.tar.gz`)
+        const tarStream = await githubService.downloadTarball(connection.accessToken, owner, repo, (repository as any).default_branch || 'main')
+        await new Promise<void>((resolve, reject) => {
+          const ws = fs.createWriteStream(tarballPath)
+          tarStream.pipe(ws)
+          ws.on('finish', () => resolve())
+          ws.on('error', reject)
+          tarStream.on('error', reject)
+        })
+        await prisma.gitHubRepositoryConnection.update({
+          where: { id: repoConnection.id },
+          data: { tarballFilePath: tarballPath, tarballUpdatedAt: new Date() }
+        })
+      } catch (e) {
+        console.warn('Failed to cache tarball on connect:', e)
+      }
 
       // Create webhook for the repository
       try {
@@ -410,37 +413,14 @@ export class GitHubController {
         }
       })
 
-      // Get additional details for each repository
-      const reposWithDetails = await Promise.all(
-        connections.map(async (conn: any) => {
-          try {
-            const repo = await githubService.getRepository(
-              conn.githubConnection.accessToken,
-              conn.githubRepoFullName.split('/')[0],
-              conn.githubRepoFullName.split('/')[1]
-            )
+      // Return cached details only (no GitHub calls)
+      const data = connections.map((c: any) => ({
+        ...c,
+        repository: c.cachedRepo || null,
+        languages: c.cachedLanguages ? Object.keys(c.cachedLanguages) : []
+      }))
 
-            const languages = await githubService.getRepositoryLanguages(
-              conn.githubConnection.accessToken,
-              conn.githubRepoFullName.split('/')[0],
-              conn.githubRepoFullName.split('/')[1]
-            )
-
-            return {
-              ...conn,
-              repository: {
-                ...repo,
-                languages: Object.keys(languages)
-              }
-            }
-          } catch (error) {
-            console.error(`Error fetching details for ${conn.githubRepoFullName}:`, error)
-            return conn
-          }
-        })
-      )
-
-      sendSuccess(res, { connections: reposWithDetails }, 'Connected repositories retrieved successfully')
+      sendSuccess(res, { connections: data }, 'Connected repositories retrieved successfully')
     } catch (error) {
       console.error('Error getting connected repositories:', error)
       sendError(res, 'Failed to retrieve connected repositories', 500)

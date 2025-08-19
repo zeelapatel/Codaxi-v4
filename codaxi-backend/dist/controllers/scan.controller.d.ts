@@ -35,6 +35,10 @@ export declare class ScanController {
      */
     static getScan(req: AuthenticatedRequest, res: Response): Promise<void>;
     /**
+     * SSE: stream scan progress
+     */
+    static streamScan(req: AuthenticatedRequest, res: Response): Promise<void>;
+    /**
      * List scans by repository
      * GET /api/repos/:repoId/scans?limit=1
      */

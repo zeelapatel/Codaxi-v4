@@ -16,6 +16,21 @@ class GitHubService {
             }
         });
     }
+    /** Download repository tarball for a given ref (branch or commit SHA) */
+    async downloadTarball(accessToken, owner, repo, ref) {
+        try {
+            const response = await this.apiClient.get(`/repos/${owner}/${repo}/tarball/${encodeURIComponent(ref)}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                responseType: 'stream'
+            });
+            return response.data;
+        }
+        catch (error) {
+            throw new Error(`Failed to download tarball: ${this.getErrorMessage(error)}`);
+        }
+    }
     /**
      * Generate OAuth authorization URL
      */
@@ -106,6 +121,10 @@ class GitHubService {
             return response.data;
         }
         catch (error) {
+            // On 429 or rate limit errors, surface a friendly error
+            if (axios_1.default.isAxiosError(error) && (error.response?.status === 429)) {
+                throw new Error('GitHub API rate limit reached. Please wait and try again.');
+            }
             console.error('[GitHubService] Error getting repositories:', {
                 error: this.getErrorMessage(error),
                 fullError: error

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { GitHubController } from '../controllers/github.controller'
+import { generalRateLimit } from '../middleware/security'
 import { authenticate } from '../middleware/auth'
 
 const router = Router()
@@ -10,11 +11,12 @@ router.get('/auth/callback', GitHubController.handleOAuthCallback)
 router.post('/auth/callback', GitHubController.handleOAuthCallback)
 
 // Repository management routes (require authentication)
-router.get('/repositories', authenticate, GitHubController.getUserRepositories)
-router.post('/repositories/connect', authenticate, GitHubController.connectRepository)
-router.delete('/repositories/:connectionId', authenticate, GitHubController.disconnectRepository)
-router.get('/repositories/connected', authenticate, GitHubController.getConnectedRepositories)
-router.get('/repositories/:repoId/details', authenticate, GitHubController.getRepositoryDetails)
+// Apply rate limit only to GitHub routes to avoid throttling internal endpoints
+router.get('/repositories', authenticate, generalRateLimit, GitHubController.getUserRepositories)
+router.post('/repositories/connect', authenticate, generalRateLimit, GitHubController.connectRepository)
+router.delete('/repositories/:connectionId', authenticate, generalRateLimit, GitHubController.disconnectRepository)
+router.get('/repositories/connected', authenticate, generalRateLimit, GitHubController.getConnectedRepositories)
+router.get('/repositories/:repoId/details', authenticate, generalRateLimit, GitHubController.getRepositoryDetails)
 
 // Account management
 router.delete('/account', authenticate, GitHubController.disconnectAccount)

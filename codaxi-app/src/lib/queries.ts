@@ -53,12 +53,9 @@ export const useRepos = (filters?: RepoFilters) => {
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     enabled: !!connectedRepos?.data?.connections,
-    refetchInterval: (query) => {
-      const reposList = (query.state.data as any)?.data || []
-      const hasActive = reposList.some((r: any) => r?.lastScan && ['queued', 'parsing', 'embedding', 'generating'].includes(r.lastScan.status))
-      return hasActive ? 2000 : false
-    },
-    refetchOnWindowFocus: true
+    // Disable additional polling to reduce backend load and prevent 429s on GitHub routes
+    refetchInterval: false,
+    refetchOnWindowFocus: false
   })
 }
 
@@ -67,13 +64,8 @@ export const useRepo = (id: string) => {
     queryKey: queryKeys.repo(id),
     queryFn: () => realApiClient.getRepo(id),
     staleTime: 2 * 60 * 1000, // 2 minutes
-    refetchInterval: (query) => {
-      const status = (query.state.data as any)?.data?.lastScan?.status
-      return status && ['queued', 'parsing', 'embedding', 'generating'].includes(status) 
-        ? 2000 
-        : false
-    },
-    refetchOnWindowFocus: true
+    refetchInterval: false,
+    refetchOnWindowFocus: false
   })
 }
 
@@ -120,29 +112,69 @@ export const useStartScan = () => {
   })
 }
 
-// Docs Queries
-export const useDocs = (repoId: string, query?: string) => {
-  return useQuery({
-    queryKey: queryKeys.docs(repoId, query),
-    queryFn: () => mockApiClient.getDocs(repoId, query),
-    staleTime: 10 * 60 * 1000, // 10 minutes
+export const useCancelScan = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (scanId: string) => realApiClient.cancelScan(scanId),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.scan(id) })
+    }
   })
 }
 
-export const useDoc = (repoId: string, docId: string) => {
+// Docs Queries (real backend)
+export const useDocs = (repoId: string, query?: string, opts?: { kinds?: string[]; page?: number; pageSize?: number }) => {
+  return useQuery({
+    queryKey: queryKeys.docs(repoId, `${query || ''}-${(opts?.kinds || []).join(',')}-${opts?.page || 1}-${opts?.pageSize || 50}`),
+    queryFn: () => realApiClient.getDocs(repoId, query, opts),
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export const useDoc = (repoId: string, docId: string, options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: queryKeys.doc(repoId, docId),
-    queryFn: () => mockApiClient.getDoc(repoId, docId),
-    staleTime: 15 * 60 * 1000, // 15 minutes
+    queryFn: () => realApiClient.getDoc(repoId, docId),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: options?.enabled ?? true,
+  })
+}
+
+// Doc schema (request/response/errors)
+export const useDocSchema = (repoId: string, docId: string, options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: ['doc-schema', repoId, docId],
+    queryFn: () => realApiClient.getDocSchema(repoId, docId),
+    staleTime: 60 * 1000,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export const useUpdateDocSchema = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ repoId, docId, data }: { repoId: string; docId: string; data: { params?: any; requestSchema?: any; requestExample?: any; responses?: any; errors?: any } }) =>
+      realApiClient.updateDocSchema(repoId, docId, data),
+    onSuccess: (_res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['doc-schema', vars.repoId, vars.docId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.doc(vars.repoId, vars.docId) })
+    }
+  })
+}
+
+export const useGenerateDocSchema = () => {
+  return useMutation({
+    mutationFn: ({ repoId, docId }: { repoId: string; docId: string }) => realApiClient.generateDocSchema(repoId, docId)
   })
 }
 
 export const useSearchDocs = (repoId: string, query: string) => {
   return useQuery({
     queryKey: ['search-docs', repoId, query],
-    queryFn: () => mockApiClient.searchDocs(repoId, query),
-    enabled: query.length > 2, // Only search if query is longer than 2 chars
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryFn: () => realApiClient.getDocs(repoId, query).then(r => ({ ...r, data: r.data })),
+    enabled: query.length > 1,
+    staleTime: 60 * 1000,
   })
 }
 
