@@ -3,8 +3,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from '@/components/ui/sonner'
-import { ThemeProvider } from './theme-provider'
-import { KeyboardShortcuts } from './keyboard-shortcuts'
+import { ThemeProvider } from '@/components/theme-provider'
+import { AuthProvider } from '@/contexts/auth-context'
+import { KeyboardShortcuts } from '@/components/keyboard-shortcuts'
 import { useState } from 'react'
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -38,12 +39,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultTheme="system"
         enableSystem
         disableTransitionOnChange
+        suppressHydrationWarning
       >
-        <KeyboardShortcuts>
-          {children}
-        </KeyboardShortcuts>
-        <Toaster />
-        <ReactQueryDevtools initialIsOpen={false} />
+        <AuthProvider>
+          <KeyboardShortcuts>
+            {children}
+          </KeyboardShortcuts>
+          <Toaster />
+          <ReactQueryDevtools initialIsOpen={false} />
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )

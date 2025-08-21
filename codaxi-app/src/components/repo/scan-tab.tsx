@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useStartScan, useScan } from '@/lib/queries'
+import { useStartScan, useScan, useCancelScan, queryKeys } from '@/lib/queries'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAnalyticsStore } from '@/lib/store'
 import { Repo, Scan } from '@/types'
 import { 
@@ -33,26 +34,45 @@ interface ScanTabProps {
 export function ScanTab({ repoId, repo }: ScanTabProps) {
   const { track } = useAnalyticsStore()
   const startScanMutation = useStartScan()
+  const cancelScanMutation = useCancelScan()
+  const queryClient = useQueryClient()
   const [currentScanId, setCurrentScanId] = useState<string | null>(
     repo.lastScan?.id || null
   )
+  const storageKey = `codaxi:lastScanId:${repoId}`
   
   const { data: currentScan, isLoading: scanLoading } = useScan(
     currentScanId || ''
   )
 
-  // Listen for scan progress events
+  // Listen via SSE instead of polling
   useEffect(() => {
-    const handleScanProgress = (event: CustomEvent) => {
-      if (event.detail.scanId === currentScanId) {
-        // The query will automatically refetch due to refetchInterval
+    // Resume from localStorage if repo details didn't include lastScan
+    if (!currentScanId && typeof window !== 'undefined') {
+      const savedId = localStorage.getItem(storageKey)
+      if (savedId) {
+        setCurrentScanId(savedId)
       }
     }
+  }, [])
 
-    window.addEventListener('scan-progress', handleScanProgress as EventListener)
-    return () => {
-      window.removeEventListener('scan-progress', handleScanProgress as EventListener)
+  useEffect(() => {
+    if (!currentScanId) return
+    const es = new EventSource(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/scans/${currentScanId}/stream`, { withCredentials: true } as any)
+    const onMessage = (evt: MessageEvent) => {
+      try {
+        const data = JSON.parse(evt.data)
+        if (data?.scanId === currentScanId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.scan(currentScanId) })
+        }
+      } catch {}
     }
+    es.addEventListener('message', onMessage)
+    es.onmessage = onMessage
+    es.onerror = () => {
+      es.close()
+    }
+    return () => { es.close() }
   }, [currentScanId])
 
   const handleStartScan = async () => {
@@ -60,6 +80,11 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
       track('start_scan', { repoId })
       const result = await startScanMutation.mutateAsync({ repoId })
       setCurrentScanId(result.data.id)
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(storageKey, result.data.id)
+        }
+      } catch {}
       toast.success('Scan started successfully')
     } catch (error) {
       toast.error('Failed to start scan')
@@ -114,6 +139,8 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
     }
   }
 
+  // Keep last scan id in storage so completed scans are shown after navigation
+
   return (
     <div className="space-y-6">
       {/* Scan Controls */}
@@ -145,8 +172,16 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
                 )}
               </Button>
               
-              {isScanning && (
-                <Button variant="outline" size="sm">
+              {isScanning && currentScanId && (
+                <Button variant="outline" size="sm" disabled={cancelScanMutation.isPending} onClick={async () => {
+                  try {
+                    await cancelScanMutation.mutateAsync(currentScanId)
+                    toast.success('Cancel requested')
+                    queryClient.invalidateQueries({ queryKey: queryKeys.scan(currentScanId) })
+                  } catch {
+                    toast.error('Failed to cancel')
+                  }
+                }}>
                   <Square className="w-4 h-4" />
                   Cancel
                 </Button>
@@ -238,7 +273,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <FileText className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.filesParsed}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.filesParsed || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Source files analyzed
               </p>
@@ -251,7 +286,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <Code className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.endpointsDetected}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.endpointsDetected || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Routes discovered
               </p>
@@ -264,7 +299,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <Zap className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.eventsDetected}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.eventsDetected || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Event handlers found
               </p>
@@ -277,7 +312,7 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
               <Hash className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{scanData.metrics.typesDetected}</div>
+              <div className="text-2xl font-bold">{scanData.metrics?.typesDetected || 0}</div>
               <p className="text-xs text-muted-foreground">
                 Type definitions
               </p>

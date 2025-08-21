@@ -1,0 +1,61 @@
+{
+  "name": "codaxi-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Codaxi - AI-powered documentation generator",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset",
+    "db:seed": "ts-node prisma/seed.ts",
+    "db:studio": "prisma studio"
+  },
+  "keywords": [
+    "api",
+    "backend",
+    "typescript",
+    "express",
+    "postgresql",
+    "prisma",
+    "jwt",
+    "authentication"
+  ],
+  "author": "Codaxi Team",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/parser": "^7.25.9",
+    "@babel/traverse": "^7.25.9",
+    "@prisma/client": "^6.1.0",
+    "axios": "^1.11.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "tar": "^6.2.1",
+    "validator": "^13.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.28.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^22.10.5",
+    "@types/tar": "^6.1.13",
+    "@types/validator": "^13.12.2",
+    "nodemon": "^3.1.9",
+    "prisma": "^6.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}

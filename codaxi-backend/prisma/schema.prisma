@@ -1,0 +1,284 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  MEMBER
+  VIEWER
+}
+
+enum PlanType {
+  FREE
+  TEAM
+  ENTERPRISE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  company   String?
+  role      UserRole @default(MEMBER)
+  avatar    String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Email verification
+  emailVerified Boolean @default(false)
+  verificationToken String?
+  
+  // Password reset
+  resetToken String?
+  resetTokenExpiry DateTime?
+  
+  // Last login tracking
+  lastLoginAt DateTime?
+  
+  // Relations
+  organizations OrganizationMember[]
+  gitHubConnections GitHubConnection[]
+  gitHubOAuthStates GitHubOAuthState[]
+  
+  @@map("users")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  planType    PlanType @default(FREE)
+  
+  // Settings
+  settings Json @default("{}")
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  members OrganizationMember[]
+  
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id     String   @id @default(cuid())
+  role   UserRole @default(MEMBER)
+  
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+// Session management (for JWT token blacklisting)
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  isRevoked    Boolean  @default(false)
+  
+  @@map("sessions")
+}
+
+// Audit log for security
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  resource  String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  
+  @@map("audit_logs")
+}
+
+// GitHub OAuth state for CSRF protection
+model GitHubOAuthState {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("github_oauth_states")
+}
+
+// GitHub account connections
+model GitHubConnection {
+  id             String   @id @default(cuid())
+  userId         String
+  githubUserId   Int
+  githubUsername String
+  
+  // OAuth tokens
+  accessToken    String
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  scope          String
+  
+  // Status
+  isActive       Boolean  @default(true)
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  user                    User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositoryConnections   GitHubRepositoryConnection[]
+  
+  @@unique([userId, githubUserId])
+  @@map("github_connections")
+}
+
+// GitHub repository connections
+model GitHubRepositoryConnection {
+  id                String   @id @default(cuid())
+  githubConnectionId String
+  repositoryId      String   @unique
+  
+  // GitHub repository info
+  githubRepoId      Int
+  githubRepoName    String
+  githubRepoFullName String
+  
+  // Status
+  isActive          Boolean  @default(true)
+  lastSyncAt        DateTime?
+  // Cached details to avoid repeated GitHub API calls
+  cachedRepo        Json?
+  cachedLanguages   Json?
+  tarballFilePath   String?
+  tarballUpdatedAt  DateTime?
+  
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relations
+  githubConnection GitHubConnection @relation(fields: [githubConnectionId], references: [id], onDelete: Cascade)
+  webhooks         GitHubWebhook[]
+  
+  @@unique([githubConnectionId, githubRepoId])
+  @@map("github_repository_connections")
+}
+
+// GitHub webhooks
+model GitHubWebhook {
+  id                    String   @id @default(cuid())
+  repositoryConnectionId String
+  webhookId            Int
+  webhookUrl           String
+  webhookSecret        String
+  isActive             Boolean  @default(true)
+  
+  // Timestamps
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  // Relations
+  repositoryConnection GitHubRepositoryConnection @relation(fields: [repositoryConnectionId], references: [id], onDelete: Cascade)
+  
+  @@map("github_webhooks")
+}
+
+// Persisted scans and metrics
+model Scan {
+  id                String   @id @default(cuid())
+  repositoryId      String
+  branch            String
+  status            String
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  filesParsed       Int      @default(0)
+  endpointsDetected Int      @default(0)
+  eventsDetected    Int      @default(0)
+  typesDetected     Int      @default(0)
+  tokensUsed        Int      @default(0)
+  durationSec       Int      @default(0)
+  errors            Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([repositoryId])
+  @@map("scans")
+}
+
+// Documentation nodes produced by scans
+model DocNode {
+  id            String   @id @default(cuid())
+  repositoryId  String
+  scanId        String?
+  kind          String   // route | event | type | module | function | class
+  path          String   // e.g. /api/orders or file path symbol path
+  title         String
+  summary       String?
+  citations     Json?
+  html          String?
+  parentId      String?
+  metadata      Json?
+
+  // API schema fields (for route docs)
+  params           Json?
+  requestSchema    Json?
+  requestExample   Json?
+  responses        Json?
+  errors           Json?
+
+  // Versioning
+  schemaVersion    Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([repositoryId])
+  @@index([scanId])
+  @@map("doc_nodes")
+}
+
+// Historical versions of API schemas for a DocNode
+model DocSchemaVersion {
+  id           String   @id @default(cuid())
+  docNodeId    String
+  version      Int
+  params           Json?
+  requestSchema    Json?
+  requestExample   Json?
+  responses        Json?
+  errors           Json?
+  createdByUserId  String?
+  createdAt     DateTime @default(now())
+
+  @@index([docNodeId, version])
+  @@map("doc_schema_versions")
+}
