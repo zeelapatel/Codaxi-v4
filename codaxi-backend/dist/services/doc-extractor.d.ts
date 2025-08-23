@@ -12,4 +12,5 @@ export type ExtractedDoc = {
     metadata?: Record<string, any>;
 };
 export declare function extractFromSource(filePath: string, code: string): ExtractedDoc[];
+export declare function enumerateSourceFiles(rootDir: string): Promise<string[]>;
 //# sourceMappingURL=doc-extractor.d.ts.map

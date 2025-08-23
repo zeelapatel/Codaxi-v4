@@ -21,6 +21,7 @@ import {
   Network,
   Calendar,
   Users,
+  ArrowLeft,
   Eye,
   Lock
 } from 'lucide-react'
@@ -126,6 +127,12 @@ export default function RepoDetailPage() {
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="space-y-4">
+          <div>
+            <Button variant="ghost" size="sm" onClick={() => router.back()}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+          </div>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">

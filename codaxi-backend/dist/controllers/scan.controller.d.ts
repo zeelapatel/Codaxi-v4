@@ -21,6 +21,7 @@ interface ScanRecord {
         stage: string;
         message: string;
     }>;
+    parsedFiles?: string[];
 }
 export declare const getInMemoryScanForRepo: (repoId: string) => ScanRecord | undefined;
 export declare class ScanController {
@@ -29,6 +30,11 @@ export declare class ScanController {
      * POST /api/scans
      */
     static startScan(req: AuthenticatedRequest, res: Response): Promise<void>;
+    /**
+     * Cancel an in-progress scan
+     * POST /api/scans/:id/cancel
+     */
+    static cancelScan(req: AuthenticatedRequest, res: Response): Promise<void>;
     /**
      * Get scan status by id
      * GET /api/scans/:id

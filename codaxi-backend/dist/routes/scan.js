@@ -10,5 +10,6 @@ router.get('/scans/:id', auth_1.authenticate, scan_controller_1.ScanController.g
 router.get('/scans/:id/stream', auth_1.authenticate, scan_controller_1.ScanController.streamScan);
 router.get('/scans/active', auth_1.authenticate, scan_controller_1.ScanController.activeScans);
 router.get('/repos/:repoId/scans', auth_1.authenticate, scan_controller_1.ScanController.listScans);
+router.post('/scans/:id/cancel', auth_1.authenticate, scan_controller_1.ScanController.cancelScan);
 exports.default = router;
 //# sourceMappingURL=scan.js.map

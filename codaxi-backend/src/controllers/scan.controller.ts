@@ -5,12 +5,19 @@ import { GitHubService } from '../services/github.service'
 import { config } from '../config'
 import { db } from '../utils/database'
 import { extractFromSource } from '../services/doc-extractor'
+import { detectExpress } from '../services/detectors/express'
+import { detectNest } from '../services/detectors/nest'
+import { detectNext } from '../services/detectors/next'
+import { detectFastify } from '../services/detectors/fastify'
+import { detectKoa } from '../services/detectors/koa'
+import { detectReactRouter } from '../services/detectors/react-router'
 import { appEvents } from '../utils/events'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import tar from 'tar'
 import { extractFromJavaSource } from '../services/doc-extractor-java'
+import { detectSpring } from '../services/detectors/spring'
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, '&amp;')
@@ -39,6 +46,7 @@ interface ScanRecord {
 	completedAt?: string
 	metrics: ScanMetrics
 	errors?: Array<{ stage: string; message: string }>
+    parsedFiles?: string[]
 }
 
 /**
@@ -86,7 +94,8 @@ class InMemoryScanManager {
 				typesDetected: 0,
 				tokensUsed: 0,
 				durationSec: 0
-			}
+			},
+            parsedFiles: []
 		}
 
 		this.scans.set(scan.id, scan)
@@ -251,7 +260,7 @@ class InMemoryScanManager {
 		const [rootFolder] = fs.readdirSync(tmpDir)
 		const repoRoot = path.join(tmpDir, rootFolder)
 
-		const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.java', '.py', '.go', '.rs', '.cpp', '.c', '.cs'])
+		const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.java'])
 		const isCodeFile = (p: string) => Array.from(codeExtensions).some(ext => p.toLowerCase().endsWith(ext))
 
 		// Walk files
@@ -272,13 +281,11 @@ class InMemoryScanManager {
 		// Phase 2: embedding (fetch contents and compute primary metrics)
 		this.updateScan(scanId, { status: 'embedding' })
 
-		let endpointsDetected = 0
-		let eventsDetected = 0
-		let typesDetected = 0
 		let tokensUsed = 0
 
 		const MAX_FILES = 400
 		const extractedDocs: any[] = []
+        const parsedRelPaths = new Set<string>()
 		for (let i = 0; i < Math.min(codeFiles.length, MAX_FILES); i++) {
 			if (this.canceled.has(scanId)) {
 				this.updateScan(scanId, { status: 'error', errors: [{ stage: 'cancel', message: 'Canceled by user' }], completedAt: new Date().toISOString() as any })
@@ -288,14 +295,6 @@ class InMemoryScanManager {
 			try {
 				const text = fs.readFileSync(filePath, 'utf-8')
 
-				const routeRegex = /(router|app)\.(get|post|put|delete|patch|options|head)\(\s*['"`](.*?)['"`]/gi
-				const eventRegex = /\.(emit|on)\(\s*['"`](.*?)['"`]/gi
-				const tsTypeRegex = /export\s+(interface|type)\s+\w+/g
-				const classRegex = /export\s+class\s+\w+/g
-
-				endpointsDetected += (text.match(routeRegex) || []).length
-				eventsDetected += (text.match(eventRegex) || []).length
-				typesDetected += (text.match(tsTypeRegex) || []).length + (text.match(classRegex) || []).length
 				tokensUsed += Math.ceil(text.length / 4)
 
 				if (i % 50 === 0) {
@@ -303,9 +302,6 @@ class InMemoryScanManager {
 						status: 'embedding',
 						metrics: {
 							filesParsed: codeFiles.length,
-							endpointsDetected,
-							eventsDetected,
-							typesDetected,
 							tokensUsed
 						}
 					})
@@ -314,11 +310,23 @@ class InMemoryScanManager {
 				// Extract docs from source and enrich with summary/html
 				if (text) {
 					const rel = path.relative(repoRoot, filePath).replace(/\\/g, '/')
+                    parsedRelPaths.add(rel)
 					let found: any[] = []
 					if (/\.(ts|tsx|js|jsx)$/i.test(filePath)) {
-						found = extractFromSource(rel, text)
+						found = [
+							...extractFromSource(rel, text),
+							...detectExpress(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+							...detectNest(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+							...detectNext(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+							...detectFastify(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+							...detectKoa(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+							...detectReactRouter(rel, text).map(d => ({ kind: 'route', path: d.path, title: d.path, citations: d.citations, metadata: { framework: d.metadata?.framework } })),
+						]
 					} else if (/\.java$/i.test(filePath)) {
-						found = extractFromJavaSource(rel, text)
+						found = [
+							...extractFromJavaSource(rel, text),
+							...detectSpring(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } }))
+						]
 					}
 					found = found.map((d) => {
 						let html: string | undefined
@@ -346,13 +354,31 @@ class InMemoryScanManager {
 		}
 
 		// Phase 3: generating (finalize)
+		// attach parsed files list in-memory
+		const currentScan = this.scans.get(scanId)
+		if (currentScan) {
+			currentScan.parsedFiles = Array.from(parsedRelPaths)
+			this.scans.set(scanId, currentScan)
+		}
+		// Compute metrics from aggregated docs to avoid mismatch
+		const serverFrameworks = new Set(['express','nest','fastify','koa','spring','next'])
+		const uniqueServer = new Set<string>()
+		const uniqueClient = new Set<string>()
+		for (const d of extractedDocs) {
+			if (d.kind !== 'route') continue
+			const fw = (d.metadata?.framework || '').toString().toLowerCase()
+			const method = (d.metadata?.method || 'get').toString().toLowerCase()
+			const key = `${method}|${d.path}|${fw}`
+			if (serverFrameworks.has(fw)) uniqueServer.add(key)
+			else uniqueClient.add(`${d.path}|${fw}`)
+		}
 		this.updateScan(scanId, {
 			status: 'generating',
 			metrics: {
 				filesParsed: codeFiles.length,
-				endpointsDetected,
-				eventsDetected,
-				typesDetected,
+				endpointsDetected: uniqueServer.size as any,
+				eventsDetected: 0 as any,
+				typesDetected: 0 as any,
 				tokensUsed
 			}
 		})
@@ -456,7 +482,8 @@ export class ScanController {
 								tokensUsed: row.tokensUsed,
 								durationSec: row.durationSec
 							},
-							errors: row.errors || undefined
+							errors: row.errors || undefined,
+							parsedFiles: []
 						}
 					}
 				} catch {}

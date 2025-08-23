@@ -4,8 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractFromSource = extractFromSource;
+exports.enumerateSourceFiles = enumerateSourceFiles;
 const parser_1 = require("@babel/parser");
 const traverse_1 = __importDefault(require("@babel/traverse"));
+const fast_glob_1 = __importDefault(require("fast-glob"));
 function extractFromSource(filePath, code) {
     const docs = [];
     let ast;
@@ -74,5 +76,24 @@ function extractFromSource(filePath, code) {
         }
     });
     return docs;
+}
+async function enumerateSourceFiles(rootDir) {
+    const patterns = [
+        '**/*.{ts,tsx,js,jsx,java}'
+    ];
+    const ignore = [
+        '**/node_modules/**',
+        '**/.next/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/coverage/**',
+        '**/.turbo/**',
+        '**/.cache/**',
+        '**/target/**',
+        '**/out/**',
+        '**/tmp/**'
+    ];
+    const files = await (0, fast_glob_1.default)(patterns, { cwd: rootDir, ignore, followSymbolicLinks: false, dot: false });
+    return files;
 }
 //# sourceMappingURL=doc-extractor.js.map

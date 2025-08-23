@@ -1,8 +1,8 @@
 import dotenv from 'dotenv'
 import { AppConfig } from '../types'
 
-// Load environment variables
-dotenv.config()
+// Load environment variables, preferring .env over machine/global env for local dev
+dotenv.config({ override: true })
 
 const requiredEnvVars = [
   'DATABASE_URL',

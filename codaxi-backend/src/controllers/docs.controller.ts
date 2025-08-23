@@ -2,9 +2,16 @@ import { Response } from 'express'
 import { AuthenticatedRequest } from '../types'
 import { sendError, sendSuccess, sendForbidden } from '../utils/response'
 import { db } from '../utils/database'
-import { generateApiExamples, generateApiExamplesWithLLM } from '../services/ai-generator'
+import { generateApiExamples, generateApiExamplesWithLLM, generateFromContextPack } from '../services/ai-generator'
 import { z } from 'zod'
 import { sanitizeHtml, isJsonSerializable, clampJsonSize } from '../utils/sanitize'
+import fs from 'fs'
+import os from 'os'
+import tar from 'tar'
+import path from 'path'
+import { buildContextPack } from '../services/context-builder'
+import { config } from '../config'
+import { GitHubService } from '../services/github.service'
 
 export class DocsController {
 	static async listDocs(req: AuthenticatedRequest, res: Response) {
@@ -193,26 +200,51 @@ export class DocsController {
 			const doc = await (db as any).docNode.findFirst({ where: { id: docId, repositoryId: repoId } })
 			if (!doc) return sendError(res, 'Doc not found', 404)
 
-			const codeContexts: Array<{ filePath: string; snippet: string }> = []
-			if (Array.isArray(doc.citations)) {
-				for (const c of doc.citations as any[]) {
-					codeContexts.push({ filePath: c.filePath, snippet: '' })
-				}
+			// Build repo snapshot root for deterministic context
+			const connection = await db.gitHubRepositoryConnection.findFirst({
+				where: { repositoryId: repoId, isActive: true },
+				include: { githubConnection: { select: { accessToken: true, githubUsername: true } } }
+			})
+			if (!connection) return sendError(res, 'Repository connection not found or inactive', 400)
+			const [owner, repo] = connection.githubRepoFullName.split('/')
+			const githubService = new GitHubService({
+				clientId: config.github.clientId,
+				clientSecret: config.github.clientSecret,
+				redirectUri: config.github.redirectUri,
+				scope: 'repo user'
+			})
+			const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `codaxi-doc-${repoId}-`))
+			let tarStream: NodeJS.ReadableStream
+			if ((connection as any).tarballFilePath && fs.existsSync((connection as any).tarballFilePath)) {
+				tarStream = fs.createReadStream((connection as any).tarballFilePath)
+			} else {
+				const repoDetails = await githubService.getRepository(connection.githubConnection.accessToken, owner, repo)
+				const targetBranch = (repoDetails as any).default_branch || 'main'
+				tarStream = await githubService.downloadTarball(connection.githubConnection.accessToken, owner, repo, targetBranch)
 			}
+			await new Promise<void>((resolve, reject) => {
+				tarStream.pipe(tar.x({ cwd: tmpDir })).on('finish', () => resolve()).on('error', reject)
+			})
+			const [rootFolder] = fs.readdirSync(tmpDir)
+			const repoRoot = path.join(tmpDir, rootFolder)
 
-			const start = Date.now()
-			const gen = await generateApiExamplesWithLLM({
-				method: doc.metadata?.method,
-				fullPath: doc.path,
-				codeContexts
+			// Build deterministic ContextPack
+			const pack = await buildContextPack(repoRoot, {
+				path: doc.path,
+				metadata: { method: doc.metadata?.method },
+				citations: Array.isArray(doc.citations) ? (doc.citations as any[]).map(c => ({ filePath: c.filePath, startLine: c.startLine, endLine: c.endLine })) : []
 			})
 
-			// structured log (no secrets)
-			console.log('[LLM] generate examples', {
+
+			const start = Date.now()
+			const gen = await generateFromContextPack(pack)
+			console.log('[LLM] generate examples (deterministic)', {
 				repoId,
 				docId,
 				latencyMs: Date.now() - start,
-				success: true
+				contexts_count: pack.contexts.length,
+				endpoint: pack.endpoint,
+				contextFiles: pack.contexts.map(c => `${c.kind}:${c.filePath}`)
 			})
 
 			return sendSuccess(res, gen, 'Generated API examples')
