@@ -1,5 +1,6 @@
 import { parse } from '@babel/parser'
 import traverse, { NodePath } from '@babel/traverse'
+import fg from 'fast-glob'
 
 export type ExtractedDoc = {
 	kind: 'route' | 'event' | 'type' | 'module' | 'function' | 'class'
@@ -81,6 +82,26 @@ export function extractFromSource(filePath: string, code: string): ExtractedDoc[
 	})
 
 	return docs
+}
+
+export async function enumerateSourceFiles(rootDir: string): Promise<string[]> {
+  const patterns = [
+    '**/*.{ts,tsx,js,jsx,java}'
+  ]
+  const ignore = [
+    '**/node_modules/**',
+    '**/.next/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/coverage/**',
+    '**/.turbo/**',
+    '**/.cache/**',
+    '**/target/**',
+    '**/out/**',
+    '**/tmp/**'
+  ]
+  const files = await fg(patterns, { cwd: rootDir, ignore, followSymbolicLinks: false, dot: false })
+  return files
 }
 
 

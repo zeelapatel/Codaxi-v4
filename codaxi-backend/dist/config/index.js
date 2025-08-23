@@ -5,8 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isTest = exports.isProduction = exports.isDevelopment = exports.config = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
-// Load environment variables
-dotenv_1.default.config();
+// Load environment variables, preferring .env over machine/global env for local dev
+dotenv_1.default.config({ override: true });
 const requiredEnvVars = [
     'DATABASE_URL',
     'JWT_SECRET',

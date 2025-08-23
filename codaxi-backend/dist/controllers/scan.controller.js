@@ -9,12 +9,19 @@ const github_service_1 = require("../services/github.service");
 const config_1 = require("../config");
 const database_1 = require("../utils/database");
 const doc_extractor_1 = require("../services/doc-extractor");
+const express_1 = require("../services/detectors/express");
+const nest_1 = require("../services/detectors/nest");
+const next_1 = require("../services/detectors/next");
+const fastify_1 = require("../services/detectors/fastify");
+const koa_1 = require("../services/detectors/koa");
+const react_router_1 = require("../services/detectors/react-router");
 const events_1 = require("../utils/events");
 const fs_1 = __importDefault(require("fs"));
 const os_1 = __importDefault(require("os"));
 const path_1 = __importDefault(require("path"));
 const tar_1 = __importDefault(require("tar"));
 const doc_extractor_java_1 = require("../services/doc-extractor-java");
+const spring_1 = require("../services/detectors/spring");
 function escapeHtml(s) {
     return s
         .replace(/&/g, '&amp;')
@@ -28,6 +35,7 @@ function escapeHtml(s) {
 class InMemoryScanManager {
     constructor() {
         this.scans = new Map();
+        this.canceled = new Set();
         this.githubService = new github_service_1.GitHubService({
             clientId: config_1.config.github.clientId,
             clientSecret: config_1.config.github.clientSecret,
@@ -66,7 +74,8 @@ class InMemoryScanManager {
                 typesDetected: 0,
                 tokensUsed: 0,
                 durationSec: 0
-            }
+            },
+            parsedFiles: []
         };
         this.scans.set(scan.id, scan);
         this.runScan(scan.id).catch((error) => {
@@ -76,6 +85,15 @@ class InMemoryScanManager {
             });
         });
         return scan;
+    }
+    cancelScan(scanId) {
+        this.canceled.add(scanId);
+        // Immediately publish error status so UI updates right away
+        this.updateScan(scanId, {
+            status: 'error',
+            errors: [{ stage: 'cancel', message: 'Canceled by user' }],
+            completedAt: new Date().toISOString()
+        });
     }
     getScan(scanId) {
         const inMemory = this.scans.get(scanId);
@@ -97,6 +115,12 @@ class InMemoryScanManager {
         return latest;
     }
     updateScan(scanId, update) {
+        // If canceled, only allow final error status updates
+        if (this.canceled.has(scanId)) {
+            if (!update.status || update.status !== 'error') {
+                return;
+            }
+        }
         const current = this.scans.get(scanId);
         if (!current)
             return;
@@ -149,6 +173,10 @@ class InMemoryScanManager {
         const scan = this.scans.get(scanId);
         if (!scan)
             return;
+        if (this.canceled.has(scanId)) {
+            this.updateScan(scanId, { status: 'error', errors: [{ stage: 'cancel', message: 'Canceled by user' }] });
+            return;
+        }
         // Phase 1: parsing (list files)
         this.updateScan(scanId, { status: 'parsing' });
         // Resolve repo connection and access token
@@ -185,10 +213,14 @@ class InMemoryScanManager {
                 .on('finish', () => resolve())
                 .on('error', reject);
         });
+        if (this.canceled.has(scanId)) {
+            this.updateScan(scanId, { status: 'error', errors: [{ stage: 'cancel', message: 'Canceled by user' }], completedAt: new Date().toISOString() });
+            return;
+        }
         // Find single top-level folder created by GitHub tarball
         const [rootFolder] = fs_1.default.readdirSync(tmpDir);
         const repoRoot = path_1.default.join(tmpDir, rootFolder);
-        const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.java', '.py', '.go', '.rs', '.cpp', '.c', '.cs']);
+        const codeExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.java']);
         const isCodeFile = (p) => Array.from(codeExtensions).some(ext => p.toLowerCase().endsWith(ext));
         // Walk files
         const allFiles = [];
@@ -207,32 +239,24 @@ class InMemoryScanManager {
         this.updateScan(scanId, { status: 'parsing', metrics: { filesParsed: codeFiles.length } });
         // Phase 2: embedding (fetch contents and compute primary metrics)
         this.updateScan(scanId, { status: 'embedding' });
-        let endpointsDetected = 0;
-        let eventsDetected = 0;
-        let typesDetected = 0;
         let tokensUsed = 0;
         const MAX_FILES = 400;
         const extractedDocs = [];
+        const parsedRelPaths = new Set();
         for (let i = 0; i < Math.min(codeFiles.length, MAX_FILES); i++) {
+            if (this.canceled.has(scanId)) {
+                this.updateScan(scanId, { status: 'error', errors: [{ stage: 'cancel', message: 'Canceled by user' }], completedAt: new Date().toISOString() });
+                return;
+            }
             const filePath = codeFiles[i];
             try {
                 const text = fs_1.default.readFileSync(filePath, 'utf-8');
-                const routeRegex = /(router|app)\.(get|post|put|delete|patch|options|head)\(\s*['"`](.*?)['"`]/gi;
-                const eventRegex = /\.(emit|on)\(\s*['"`](.*?)['"`]/gi;
-                const tsTypeRegex = /export\s+(interface|type)\s+\w+/g;
-                const classRegex = /export\s+class\s+\w+/g;
-                endpointsDetected += (text.match(routeRegex) || []).length;
-                eventsDetected += (text.match(eventRegex) || []).length;
-                typesDetected += (text.match(tsTypeRegex) || []).length + (text.match(classRegex) || []).length;
                 tokensUsed += Math.ceil(text.length / 4);
                 if (i % 50 === 0) {
                     this.updateScan(scanId, {
                         status: 'embedding',
                         metrics: {
                             filesParsed: codeFiles.length,
-                            endpointsDetected,
-                            eventsDetected,
-                            typesDetected,
                             tokensUsed
                         }
                     });
@@ -240,12 +264,24 @@ class InMemoryScanManager {
                 // Extract docs from source and enrich with summary/html
                 if (text) {
                     const rel = path_1.default.relative(repoRoot, filePath).replace(/\\/g, '/');
+                    parsedRelPaths.add(rel);
                     let found = [];
                     if (/\.(ts|tsx|js|jsx)$/i.test(filePath)) {
-                        found = (0, doc_extractor_1.extractFromSource)(rel, text);
+                        found = [
+                            ...(0, doc_extractor_1.extractFromSource)(rel, text),
+                            ...(0, express_1.detectExpress)(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+                            ...(0, nest_1.detectNest)(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+                            ...(0, next_1.detectNext)(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+                            ...(0, fastify_1.detectFastify)(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+                            ...(0, koa_1.detectKoa)(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } })),
+                            ...(0, react_router_1.detectReactRouter)(rel, text).map(d => ({ kind: 'route', path: d.path, title: d.path, citations: d.citations, metadata: { framework: d.metadata?.framework } })),
+                        ];
                     }
                     else if (/\.java$/i.test(filePath)) {
-                        found = (0, doc_extractor_java_1.extractFromJavaSource)(rel, text);
+                        found = [
+                            ...(0, doc_extractor_java_1.extractFromJavaSource)(rel, text),
+                            ...(0, spring_1.detectSpring)(rel, text).map(d => ({ kind: 'route', path: d.path, title: `${d.method.toUpperCase()} ${d.path}`, citations: d.citations, metadata: { method: d.method, framework: d.metadata?.framework } }))
+                        ];
                     }
                     found = found.map((d) => {
                         let html;
@@ -274,13 +310,34 @@ class InMemoryScanManager {
             }
         }
         // Phase 3: generating (finalize)
+        // attach parsed files list in-memory
+        const currentScan = this.scans.get(scanId);
+        if (currentScan) {
+            currentScan.parsedFiles = Array.from(parsedRelPaths);
+            this.scans.set(scanId, currentScan);
+        }
+        // Compute metrics from aggregated docs to avoid mismatch
+        const serverFrameworks = new Set(['express', 'nest', 'fastify', 'koa', 'spring', 'next']);
+        const uniqueServer = new Set();
+        const uniqueClient = new Set();
+        for (const d of extractedDocs) {
+            if (d.kind !== 'route')
+                continue;
+            const fw = (d.metadata?.framework || '').toString().toLowerCase();
+            const method = (d.metadata?.method || 'get').toString().toLowerCase();
+            const key = `${method}|${d.path}|${fw}`;
+            if (serverFrameworks.has(fw))
+                uniqueServer.add(key);
+            else
+                uniqueClient.add(`${d.path}|${fw}`);
+        }
         this.updateScan(scanId, {
             status: 'generating',
             metrics: {
                 filesParsed: codeFiles.length,
-                endpointsDetected,
-                eventsDetected,
-                typesDetected,
+                endpointsDetected: uniqueServer.size,
+                eventsDetected: 0,
+                typesDetected: 0,
                 tokensUsed
             }
         });
@@ -341,6 +398,20 @@ class ScanController {
         }
     }
     /**
+     * Cancel an in-progress scan
+     * POST /api/scans/:id/cancel
+     */
+    static async cancelScan(req, res) {
+        try {
+            const { id } = req.params;
+            scanManager.cancelScan(id);
+            return (0, response_1.sendSuccess)(res, { id }, 'Scan cancel requested');
+        }
+        catch (error) {
+            return (0, response_1.sendError)(res, 'Failed to cancel scan', 500);
+        }
+    }
+    /**
      * Get scan status by id
      * GET /api/scans/:id
      */
@@ -368,7 +439,8 @@ class ScanController {
                                 tokensUsed: row.tokensUsed,
                                 durationSec: row.durationSec
                             },
-                            errors: row.errors || undefined
+                            errors: row.errors || undefined,
+                            parsedFiles: []
                         };
                     }
                 }

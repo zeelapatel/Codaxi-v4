@@ -30,6 +30,8 @@ export type GeneratedApiExamples = {
  * Placeholder generator. Later, swap with real LLM provider.
  */
 export declare function generateApiExamples(opts: GenerateOptions): Promise<GeneratedApiExamples>;
+import { ContextPack } from '../types/context';
 export declare function generateApiExamplesWithLLM(opts: GenerateOptions): Promise<GeneratedApiExamples>;
+export declare function generateFromContextPack(pack: ContextPack): Promise<GeneratedApiExamples>;
 export {};
 //# sourceMappingURL=ai-generator.d.ts.map

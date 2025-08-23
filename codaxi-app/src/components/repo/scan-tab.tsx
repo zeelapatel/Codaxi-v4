@@ -321,6 +321,24 @@ export function ScanTab({ repoId, repo }: ScanTabProps) {
         </div>
       )}
 
+      {scanData?.parsedFiles && scanData.parsedFiles.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Parsed Files</CardTitle>
+            <CardDescription>Files analyzed in the last scan</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-64 overflow-auto text-sm space-y-1">
+              {scanData.parsedFiles.map((p: string) => (
+                <div key={p} className="flex items-center justify-between">
+                  <code className="truncate">{p}</code>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* No Scan State */}
       {!scanData && (
         <Card>

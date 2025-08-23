@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DocsController = void 0;
 const response_1 = require("../utils/response");
@@ -6,6 +9,13 @@ const database_1 = require("../utils/database");
 const ai_generator_1 = require("../services/ai-generator");
 const zod_1 = require("zod");
 const sanitize_1 = require("../utils/sanitize");
+const fs_1 = __importDefault(require("fs"));
+const os_1 = __importDefault(require("os"));
+const tar_1 = __importDefault(require("tar"));
+const path_1 = __importDefault(require("path"));
+const context_builder_1 = require("../services/context-builder");
+const config_1 = require("../config");
+const github_service_1 = require("../services/github.service");
 class DocsController {
     static async listDocs(req, res) {
         try {
@@ -179,24 +189,50 @@ class DocsController {
             const doc = await database_1.db.docNode.findFirst({ where: { id: docId, repositoryId: repoId } });
             if (!doc)
                 return (0, response_1.sendError)(res, 'Doc not found', 404);
-            const codeContexts = [];
-            if (Array.isArray(doc.citations)) {
-                for (const c of doc.citations) {
-                    codeContexts.push({ filePath: c.filePath, snippet: '' });
-                }
-            }
-            const start = Date.now();
-            const gen = await (0, ai_generator_1.generateApiExamplesWithLLM)({
-                method: doc.metadata?.method,
-                fullPath: doc.path,
-                codeContexts
+            // Build repo snapshot root for deterministic context
+            const connection = await database_1.db.gitHubRepositoryConnection.findFirst({
+                where: { repositoryId: repoId, isActive: true },
+                include: { githubConnection: { select: { accessToken: true, githubUsername: true } } }
             });
-            // structured log (no secrets)
-            console.log('[LLM] generate examples', {
+            if (!connection)
+                return (0, response_1.sendError)(res, 'Repository connection not found or inactive', 400);
+            const [owner, repo] = connection.githubRepoFullName.split('/');
+            const githubService = new github_service_1.GitHubService({
+                clientId: config_1.config.github.clientId,
+                clientSecret: config_1.config.github.clientSecret,
+                redirectUri: config_1.config.github.redirectUri,
+                scope: 'repo user'
+            });
+            const tmpDir = fs_1.default.mkdtempSync(path_1.default.join(os_1.default.tmpdir(), `codaxi-doc-${repoId}-`));
+            let tarStream;
+            if (connection.tarballFilePath && fs_1.default.existsSync(connection.tarballFilePath)) {
+                tarStream = fs_1.default.createReadStream(connection.tarballFilePath);
+            }
+            else {
+                const repoDetails = await githubService.getRepository(connection.githubConnection.accessToken, owner, repo);
+                const targetBranch = repoDetails.default_branch || 'main';
+                tarStream = await githubService.downloadTarball(connection.githubConnection.accessToken, owner, repo, targetBranch);
+            }
+            await new Promise((resolve, reject) => {
+                tarStream.pipe(tar_1.default.x({ cwd: tmpDir })).on('finish', () => resolve()).on('error', reject);
+            });
+            const [rootFolder] = fs_1.default.readdirSync(tmpDir);
+            const repoRoot = path_1.default.join(tmpDir, rootFolder);
+            // Build deterministic ContextPack
+            const pack = await (0, context_builder_1.buildContextPack)(repoRoot, {
+                path: doc.path,
+                metadata: { method: doc.metadata?.method },
+                citations: Array.isArray(doc.citations) ? doc.citations.map(c => ({ filePath: c.filePath, startLine: c.startLine, endLine: c.endLine })) : []
+            });
+            const start = Date.now();
+            const gen = await (0, ai_generator_1.generateFromContextPack)(pack);
+            console.log('[LLM] generate examples (deterministic)', {
                 repoId,
                 docId,
                 latencyMs: Date.now() - start,
-                success: true
+                contexts_count: pack.contexts.length,
+                endpoint: pack.endpoint,
+                contextFiles: pack.contexts.map(c => `${c.kind}:${c.filePath}`)
             });
             return (0, response_1.sendSuccess)(res, gen, 'Generated API examples');
         }
