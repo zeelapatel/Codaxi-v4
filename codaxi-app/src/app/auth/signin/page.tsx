@@ -10,33 +10,32 @@ import { GitBranch, Github, Mail, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { useAuth } from '@/contexts/auth-context'
+import { GuestRoute } from '@/components/auth/protected-route'
 
-export default function SignInPage() {
+function SignInContent() {
   const router = useRouter()
+  const { login, isLoading: authLoading } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
     
-    // Simulate login
-    setTimeout(() => {
-      setIsLoading(false)
-      toast.success('Welcome back!')
+    if (!email || !password) {
+      toast.error('Please fill in all fields')
+      return
+    }
+
+    const success = await login({ email, password })
+    if (success) {
       router.push('/dashboard')
-    }, 1000)
+    }
   }
 
   const handleOAuthLogin = (provider: string) => {
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
-      toast.success(`Signed in with ${provider}`)
-      router.push('/dashboard')
-    }, 1000)
+    toast.info(`${provider} integration coming soon!`)
   }
 
   return (
@@ -66,7 +65,7 @@ export default function SignInPage() {
                 variant="outline" 
                 className="w-full" 
                 onClick={() => handleOAuthLogin('GitHub')}
-                disabled={isLoading}
+                disabled={authLoading}
               >
                 <Github className="w-4 h-4 mr-2" />
                 Continue with GitHub
@@ -75,7 +74,7 @@ export default function SignInPage() {
                 variant="outline" 
                 className="w-full"
                 onClick={() => handleOAuthLogin('Google')}
-                disabled={isLoading}
+                disabled={authLoading}
               >
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -158,8 +157,8 @@ export default function SignInPage() {
                 </Link>
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
+              <Button type="submit" className="w-full" disabled={authLoading}>
+                {authLoading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
                     Signing in...
@@ -187,5 +186,13 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SignInPage() {
+  return (
+    <GuestRoute>
+      <SignInContent />
+    </GuestRoute>
   )
 }

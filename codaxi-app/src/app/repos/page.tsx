@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { AppShell } from '@/components/layout/app-shell'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { 
@@ -23,7 +24,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useRepos } from '@/lib/queries'
+import { useRepos, useGitHubRepositories, useConnectedRepositories, useConnectRepository, useDisconnectRepository } from '@/lib/queries'
+import { useAuth } from '@/contexts/auth-context'
 import { useUIStore, useAnalyticsStore } from '@/lib/store'
 import { 
   Plus, 
@@ -40,16 +42,24 @@ import {
   List,
   Eye,
   Settings,
-  BarChart3
+  BarChart3,
+  Github,
+  RefreshCw
 } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect } from 'react'
-import { RepoFilters } from '@/types'
+import { RepoFilters, Repo } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
+import { toast } from 'sonner'
+import { getLanguageAbbreviation } from '@/lib/utils'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queries'
 
 export default function ReposPage() {
   const { track } = useAnalyticsStore()
   const { reposViewMode, setReposViewMode } = useUIStore()
+  const { isGitHubConnected } = useAuth()
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<RepoFilters>({})
   
@@ -59,6 +69,13 @@ export default function ReposPage() {
   }
   
   const { data: repos, isLoading } = useRepos(queryFilters)
+  const { data: githubRepos } = useGitHubRepositories()
+  const { data: connectedRepos } = useConnectedRepositories()
+  const { mutate: connectRepo, isPending: isConnecting } = useConnectRepository()
+  const { mutate: disconnectRepo, isPending: isDisconnecting } = useDisconnectRepository()
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Repo | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
 
   useEffect(() => {
     track('view_repo_list')
@@ -102,16 +119,19 @@ export default function ReposPage() {
     return 'text-red-600'
   }
 
-  const TableView = () => (
+  const TableView = () => {
+    const safeRepos: Repo[] = ((repos?.data ?? []) as Array<Repo | null>)
+      .filter((r): r is Repo => Boolean(r))
+    return (
     <Card>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Repository</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Languages</TableHead>
-            <TableHead>Freshness</TableHead>
-            <TableHead>Last Updated</TableHead>
+            <TableHead className="px-4 text-left">Repository</TableHead>
+            <TableHead className="px-2  text-left ">Status</TableHead>
+            <TableHead className="px-2 text-left  ">Languages</TableHead>
+            <TableHead className="px-2 text-left">Freshness</TableHead>
+            <TableHead className="px-2 text-left">Last Updated</TableHead>
             <TableHead className="w-[70px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -135,7 +155,7 @@ export default function ReposPage() {
                 <TableCell><Skeleton className="w-8 h-8" /></TableCell>
               </TableRow>
             ))
-          ) : repos?.data.map((repo) => (
+          ) : safeRepos.map((repo) => (
             <TableRow key={repo.id}>
               <TableCell>
                 <div className="flex items-center gap-3">
@@ -160,8 +180,8 @@ export default function ReposPage() {
                   </div>
                 </div>
               </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
+              <TableCell className="text-left">
+                <div className="flex items-center gap-2 ">
                   {getStatusIcon(repo.lastScan?.status)}
                   <Badge 
                     variant="outline" 
@@ -171,11 +191,11 @@ export default function ReposPage() {
                   </Badge>
                 </div>
               </TableCell>
-              <TableCell>
-                <div className="flex gap-1">
+              <TableCell className="text-left">
+                <div className="flex flex-wrap gap-1 whitespace-normal break-words">
                   {repo.languages.slice(0, 3).map((lang) => (
                     <Badge key={lang} variant="secondary" className="text-xs">
-                      {lang.toUpperCase()}
+                      {getLanguageAbbreviation(lang)}
                     </Badge>
                   ))}
                   {repo.languages.length > 3 && (
@@ -185,12 +205,12 @@ export default function ReposPage() {
                   )}
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell className="text-left">
                 <span className={`font-medium ${getFreshnessColor(repo.docsFreshness)}`}>
                   {repo.docsFreshness}%
                 </span>
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
+              <TableCell className="text-left text-sm text-muted-foreground">
                 {formatDistanceToNow(new Date(repo.updatedAt), { addSuffix: true })}
               </TableCell>
               <TableCell>
@@ -229,9 +249,9 @@ export default function ReposPage() {
                       )}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { setDeleteTarget(repo); setDeleteConfirm(''); setDeleteDialogOpen(true) }}>
                       <Settings className="w-4 h-4 mr-2" />
-                      Settings
+                      Delete Connection
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -241,28 +261,48 @@ export default function ReposPage() {
         </TableBody>
       </Table>
       
-      {repos?.data.length === 0 && !isLoading && (
-        <div className="text-center py-12">
-          <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">No repositories found</h3>
-          <p className="text-muted-foreground mb-4">
-            {search || Object.keys(filters).length > 0 
-              ? 'Try adjusting your search or filters'
-              : 'Get started by adding your first repository'
-            }
-          </p>
-          <Button asChild>
-            <Link href="/repos/new">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Repository
-            </Link>
-          </Button>
-        </div>
-      )}
+             {repos?.data.length === 0 && !isLoading && (
+                             <div className="text-center py-12">
+                      <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <GitBranch className="w-10 h-10 text-primary" />
+                      </div>
+                      <h3 className="text-xl font-semibold mb-2">
+                        {isGitHubConnected ? 'Add Your First Repository' : 'Connect Your First Repository'}
+                      </h3>
+                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                        {search || Object.keys(filters).length > 0 
+                          ? 'Try adjusting your search or filters'
+                          : isGitHubConnected
+                            ? 'Choose repositories from your GitHub account to start generating documentation.'
+                            : 'Connect your GitHub repositories to start generating AI-powered documentation and get intelligent insights about your codebase.'
+                        }
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                        {isGitHubConnected ? (
+                          <Button asChild>
+                            <Link href="/repos/select">
+                              <Plus className="w-4 h-4 mr-2" />
+                              Select Repositories
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button asChild>
+                            <Link href="/onboarding">
+                              <Github className="w-4 h-4 mr-2" />
+                              Connect GitHub
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+       )}
     </Card>
-  )
+  )}
 
-  const GridView = () => (
+  const GridView = () => {
+    const safeRepos: Repo[] = ((repos?.data ?? []) as Array<Repo | null>)
+      .filter((r): r is Repo => Boolean(r))
+    return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {isLoading ? (
         [...Array(6)].map((_, i) => (
@@ -285,7 +325,7 @@ export default function ReposPage() {
             </CardContent>
           </Card>
         ))
-      ) : repos?.data.map((repo) => (
+      ) : safeRepos.map((repo) => (
         <Card key={repo.id} className="hover:shadow-md transition-shadow">
           <CardHeader>
             <div className="flex items-start justify-between">
@@ -363,32 +403,87 @@ export default function ReposPage() {
         </Card>
       ))}
       
-      {repos?.data.length === 0 && !isLoading && (
-        <div className="col-span-full">
-          <Card className="p-12 text-center">
-            <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No repositories found</h3>
-            <p className="text-muted-foreground mb-4">
-              {search || Object.keys(filters).length > 0 
-                ? 'Try adjusting your search or filters'
-                : 'Get started by adding your first repository'
-              }
-            </p>
-            <Button asChild>
-              <Link href="/repos/new">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Repository
-              </Link>
-            </Button>
-          </Card>
-        </div>
-      )}
+             {repos?.data.length === 0 && !isLoading && (
+                             <div className="col-span-full">
+                      <Card className="p-12 text-center">
+                        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <GitBranch className="w-10 h-10 text-primary" />
+                        </div>
+                        <h3 className="text-xl font-semibold mb-2">
+                          {isGitHubConnected ? 'Add Your First Repository' : 'Connect Your First Repository'}
+                        </h3>
+                        <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                          {search || Object.keys(filters).length > 0 
+                            ? 'Try adjusting your search or filters'
+                            : isGitHubConnected
+                              ? 'Choose repositories from your GitHub account to start generating documentation.'
+                              : 'Connect your GitHub repositories to start generating AI-powered documentation and get intelligent insights about your codebase.'
+                          }
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                          {isGitHubConnected ? (
+                            <Button asChild>
+                              <Link href="/repos/select">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Select Repositories
+                              </Link>
+                            </Button>
+                          ) : (
+                            <Button asChild>
+                              <Link href="/onboarding">
+                                <Github className="w-4 h-4 mr-2" />
+                                Connect GitHub
+                              </Link>
+                            </Button>
+                          )}
+                        </div>
+                      </Card>
+                    </div>
+       )}
     </div>
-  )
+  )}
 
   return (
     <AppShell>
       <div className="p-6 space-y-6">
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="sm:max-w-md bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Delete Connection</DialogTitle>
+              <DialogDescription>
+                This action will remove the connection for
+                {` ${deleteTarget?.owner}/${deleteTarget?.name} `}
+                from Codaxi. Type the full repo name to confirm.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                placeholder={`${deleteTarget?.owner}/${deleteTarget?.name}`}
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={!deleteTarget || deleteConfirm !== `${deleteTarget?.owner}/${deleteTarget?.name}` || isDisconnecting}
+                onClick={() => {
+                  if (!deleteTarget) return
+                  const expected = `${deleteTarget.owner}/${deleteTarget.name}`
+                  const conn = (connectedRepos?.data?.connections || []).find((c: any) => c.githubRepoFullName === expected)
+                  if (!conn) { toast.error('Connection not found'); return }
+                  disconnectRepo(conn.id as string)
+                  setDeleteDialogOpen(false)
+                  toast.success('Connection deleted')
+                }}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -398,7 +493,7 @@ export default function ReposPage() {
             </p>
           </div>
           <Button asChild>
-            <Link href="/repos/new">
+            <Link href="/repos/select">
               <Plus className="w-4 h-4 mr-2" />
               Add Repository
             </Link>
@@ -439,6 +534,22 @@ export default function ReposPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Refresh repositories"
+            title="Refresh"
+            onClick={async () => {
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: queryKeys.connectedRepos }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.repos })
+              ])
+              toast.success('Repository list refreshed')
+            }}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </Button>
 
           <div className="flex items-center border rounded-lg">
             <Button

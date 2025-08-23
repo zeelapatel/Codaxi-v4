@@ -1,13 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { useDocs, useDoc, useSearchDocs } from '@/lib/queries'
+import { useDocs, useDoc, useSearchDocs, useDocSchema, useUpdateDocSchema, useGenerateDocSchema } from '@/lib/queries'
 import { useUIStore, useAnalyticsStore } from '@/lib/store'
 import { DocNode, DocNodeKind } from '@/types'
 import { 
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { SchemaEditor } from './schema-editor'
 
 interface DocsTabProps {
   repoId: string
@@ -37,13 +39,27 @@ export function DocsTab({ repoId }: DocsTabProps) {
   const { expandedDocNodes, toggleDocNode } = useUIStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
+
+  // Deep-linking support: ?docId=...
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const docId = params.get('docId')
+    if (docId) setSelectedDocId(docId)
+  }, [])
   
-  const { data: docs, isLoading: docsLoading } = useDocs(repoId, searchQuery)
+  const [page, setPage] = useState(1)
+  const [kinds, setKinds] = useState<DocNodeKind[] | undefined>(undefined)
+  const { data: docs, isLoading: docsLoading } = useDocs(repoId, searchQuery, { kinds, page, pageSize: 50 })
   const { data: selectedDoc, isLoading: docLoading } = useDoc(
     repoId, 
     selectedDocId || '',
     { enabled: !!selectedDocId }
   )
+  const { data: docSchema } = useDocSchema(repoId, selectedDocId || '', { enabled: !!selectedDocId })
+  const updateSchema = useUpdateDocSchema()
+  const generateSchema = useGenerateDocSchema()
+  const [genPreview, setGenPreview] = useState<any | null>(null)
 
   const getKindIcon = (kind: DocNodeKind) => {
     switch (kind) {
@@ -85,6 +101,7 @@ export function DocsTab({ repoId }: DocsTabProps) {
 
   const handleDocSelect = (doc: DocNode) => {
     setSelectedDocId(doc.id)
+    setGenPreview(null)
     track('docs_view_node', { docId: doc.id, kind: doc.kind })
   }
 
@@ -169,6 +186,83 @@ export function DocsTab({ repoId }: DocsTabProps) {
         </div>
       </div>
 
+      {/* API Generate Section (only for routes) */}
+      {doc.kind === 'route' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">API</CardTitle>
+            <CardDescription>Generate demo API data inferred from code</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-muted-foreground">Click to generate request/response examples for this route.</div>
+                <Button
+                  size="sm"
+                  disabled={!selectedDocId || generateSchema.isPending}
+                  onClick={async () => {
+                    if (!selectedDocId) return
+                    const res = await generateSchema.mutateAsync({ repoId, docId: selectedDocId })
+                    setGenPreview(res.data || null)
+                    if (!res.data) toast.error('Failed to generate demo data')
+                  }}
+                >{generateSchema.isPending ? 'Generating...' : 'Generate demo api data'}</Button>
+              </div>
+
+              {genPreview && (
+                <div className="space-y-4 text-sm">
+                  <div>
+                    <h4 className="font-medium mb-2">Request</h4>
+                    <div className="space-y-2">
+                      <div>
+                        <span className="font-medium mr-2">Params:</span>
+                        <pre className="bg-muted p-2 rounded overflow-x-auto">{JSON.stringify(genPreview.params || {}, null, 2)}</pre>
+                      </div>
+                      <div>
+                        <span className="font-medium mr-2">Body example:</span>
+                        <pre className="bg-muted p-2 rounded overflow-x-auto">{JSON.stringify(genPreview.requestExample || null, null, 2)}</pre>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Responses</h4>
+                    {genPreview.responses ? (
+                      <div className="space-y-2">
+                        {Object.entries(genPreview.responses as any).map(([status, r]: any) => (
+                          <div key={status} className="border rounded p-2">
+                            <div className="text-xs text-muted-foreground mb-1">Status {status} — {r?.contentType || 'application/json'}</div>
+                            <pre className="bg-muted p-2 rounded overflow-x-auto">{JSON.stringify(r?.example ?? null, null, 2)}</pre>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">No responses</div>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-medium mb-2">Errors</h4>
+                    {Array.isArray(genPreview.errors) && genPreview.errors.length > 0 ? (
+                      <div className="space-y-1">
+                        {genPreview.errors.map((e: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between border rounded p-2">
+                            <div>
+                              <span className="font-medium">{e.status}</span> {e.code ? `— ${e.code}` : ''}
+                              <div className="text-xs text-muted-foreground">{e.message}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">No errors</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Table of Contents */}
       {doc.anchors && doc.anchors.length > 0 && (
         <Card>
@@ -232,9 +326,11 @@ export function DocsTab({ repoId }: DocsTabProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      {citation.sha.slice(0, 7)}
-                    </Badge>
+                    {citation.sha ? (
+                      <Badge variant="outline" className="text-xs">
+                        {citation.sha.slice(0, 7)}
+                      </Badge>
+                    ) : null}
                     <ExternalLink className="w-4 h-4 text-muted-foreground" />
                   </div>
                 </div>
@@ -277,7 +373,32 @@ export function DocsTab({ repoId }: DocsTabProps) {
                 ))}
               </div>
             ) : docs?.data ? (
-              <DocTree docs={docs.data} />
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex gap-2 text-xs">
+                    {(['route','event','type','function','class','module'] as DocNodeKind[]).map(k => (
+                      <Badge key={k} variant={kinds?.includes(k) ? 'default' : 'outline'} className="cursor-pointer" onClick={() => {
+                        setPage(1)
+                        setKinds(prev => {
+                          if (!prev) return [k]
+                          return prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]
+                        })
+                      }}>
+                        {k}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {(docs.data as any).total ?? ''} items
+                  </div>
+                </div>
+                <DocTree docs={(docs.data as any).items || []} />
+                <div className="flex items-center justify-between mt-3 text-xs">
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</Button>
+                  <div>Page {page}</div>
+                  <Button variant="outline" size="sm" disabled={((docs.data as any).items || []).length < 50} onClick={() => setPage(p => p + 1)}>Next</Button>
+                </div>
+              </>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
                 <FileText className="w-8 h-8 mx-auto mb-2" />

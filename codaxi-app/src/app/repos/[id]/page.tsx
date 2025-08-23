@@ -21,11 +21,13 @@ import {
   Network,
   Calendar,
   Users,
+  ArrowLeft,
   Eye,
   Lock
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { formatDistanceToNow } from 'date-fns'
+import { getLanguageAbbreviation } from '@/lib/utils'
 import { ScanTab } from '@/components/repo/scan-tab'
 import { DocsTab } from '@/components/repo/docs-tab'
 import { QATab } from '@/components/repo/qa-tab'
@@ -103,30 +105,55 @@ export default function RepoDetailPage() {
 
   const repoData = repo.data
 
+  // Get real data from the backend response
+  const {
+    owner,
+    name,
+    description,
+    visibility = 'public',
+    defaultBranch = 'main',
+    updatedAt,
+    languages = [],
+    isFavorite,
+    lastScan,
+    docsFreshness
+  } = repoData
+
+  // Construct GitHub URL (since we know it's from GitHub)
+  const githubUrl = `https://github.com/${owner}/${name}`
+
   return (
     <AppShell>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="space-y-4">
+          <div>
+            <Button variant="ghost" size="sm" onClick={() => router.back()}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+          </div>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                {repoData.owner}/{repoData.name}
-                {repoData.isFavorite ? (
+                {owner}/{name}
+                {isFavorite ? (
                   <Star className="w-6 h-6 text-yellow-500 fill-current" />
                 ) : (
                   <StarOff className="w-6 h-6 text-muted-foreground" />
                 )}
               </h1>
               <p className="text-muted-foreground mt-1">
-                {repoData.description || 'No description provided'}
+                {description || 'No description provided'}
               </p>
             </div>
             
             <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <ExternalLink className="w-4 h-4 mr-2" />
-                View on {repoData.provider}
+              <Button variant="outline" size="sm" asChild>
+                <a href={githubUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View on GitHub
+                </a>
               </Button>
               <Button variant="outline" size="sm">
                 <Settings className="w-4 h-4 mr-2" />
@@ -138,37 +165,30 @@ export default function RepoDetailPage() {
           {/* Metadata */}
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
-              {repoData.visibility === 'private' ? (
+              {visibility === 'private' ? (
                 <Lock className="w-4 h-4" />
               ) : (
                 <Eye className="w-4 h-4" />
               )}
-              <span className="capitalize">{repoData.visibility}</span>
+              <span className="capitalize">{visibility}</span>
             </div>
             
             <div className="flex items-center gap-1">
               <GitBranch className="w-4 h-4" />
-              <span>{repoData.defaultBranch}</span>
+              <span>{defaultBranch}</span>
             </div>
             
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
               <span>
-                Updated {formatDistanceToNow(new Date(repoData.updatedAt), { addSuffix: true })}
+                Updated {formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}
               </span>
             </div>
             
-            {repoData.starCount && (
-              <div className="flex items-center gap-1">
-                <Star className="w-4 h-4" />
-                <span>{repoData.starCount.toLocaleString()} stars</span>
-              </div>
-            )}
-            
             <div className="flex gap-1">
-              {repoData.languages.map((lang) => (
-                <Badge key={lang} variant="secondary" className="text-xs">
-                  {lang.toUpperCase()}
+              {languages.map((lang) => (
+                <Badge key={lang} variant="outline" className="text-xs bg-muted/20 border-0">
+                  {getLanguageAbbreviation(lang)}
                 </Badge>
               ))}
             </div>

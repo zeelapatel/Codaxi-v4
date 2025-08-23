@@ -14,9 +14,15 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 
 export default function HomePage() {
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
@@ -36,7 +42,7 @@ export default function HomePage() {
               size="sm"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              {theme === 'dark' ? '☀️' : '🌙'}
+              {mounted ? (theme === 'dark' ? '☀️' : '🌙') : '🌓'}
             </Button>
             <Button variant="ghost" asChild>
               <Link href="/auth/signin">Sign In</Link>
@@ -73,7 +79,14 @@ export default function HomePage() {
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Link>
             </Button>
-            <Button variant="outline" size="lg" className="text-lg px-8">
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="text-lg px-8"
+              onClick={() => {
+                alert("Coming soon! Demo will be available shortly.")
+              }}
+            >
               Watch Demo
             </Button>
           </div>
