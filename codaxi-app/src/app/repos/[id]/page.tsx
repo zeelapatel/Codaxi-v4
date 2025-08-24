@@ -92,7 +92,7 @@ export default function RepoDetailPage() {
             <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">Repository not found</h3>
             <p className="text-muted-foreground mb-4">
-              The repository you're looking for doesn't exist or you don't have access to it.
+              The repository you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.
             </p>
             <Button onClick={() => router.back()}>
               Go Back

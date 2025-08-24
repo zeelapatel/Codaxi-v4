@@ -116,11 +116,13 @@ export default function BillingPage() {
                 {(usage?.data?.reposScanned ?? 0)} / {(usage?.data?.maxRepos ?? 0)}
               </div>
               <Progress 
+
                 value={(() => {
                   const scanned = usage?.data?.reposScanned ?? 0
                   const total = usage?.data?.maxRepos ?? 0
                   return total > 0 ? (scanned / total) * 100 : 0
                 })()} 
+
                 className="mt-2"
               />
             </CardContent>
@@ -133,6 +135,7 @@ export default function BillingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
+
                 {(usage?.data?.tokensUsed ?? 0).toLocaleString()}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -144,6 +147,7 @@ export default function BillingPage() {
                   const max = usage?.data?.maxTokens ?? 0
                   return max > 0 ? (used / max) * 100 : 0
                 })()} 
+
                 className="mt-2"
               />
             </CardContent>
