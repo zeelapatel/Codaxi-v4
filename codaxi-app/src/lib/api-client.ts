@@ -1,5 +1,5 @@
 // Real API client for backend integration
-const API_BASE_URL = (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_BASE_URL) || 'https://codaxi-v4.onrender.com/api'
+const API_BASE_URL = (typeof process !== 'undefined' && (process as any).env?.NEXT_PUBLIC_API_BASE_URL) || 'http://localhost:5000/api'
 
 // Import GitHub types
 import {
