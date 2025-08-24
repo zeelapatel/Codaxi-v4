@@ -111,9 +111,9 @@ export default function SettingsPage() {
                   Current plan: <Badge>{organization?.data.planType || 'team'}</Badge>
                 </div>
               </div>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" disabled title="Coming soon">
                 <ExternalLink className="w-4 h-4 mr-2" />
-                Manage Billing
+                Coming Soon
               </Button>
             </div>
           </CardContent>
@@ -290,8 +290,8 @@ export default function SettingsPage() {
                   onCheckedChange={(checked) => setSettings(prev => ({ ...prev, slackIntegrationEnabled: checked }))}
                 />
                 {settings.slackIntegrationEnabled && (
-                  <Button variant="outline" size="sm">
-                    Configure
+                  <Button variant="outline" size="sm" disabled title="Coming soon">
+                    Coming Soon
                   </Button>
                 )}
               </div>
@@ -340,13 +340,13 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <Button variant="outline">
+              <Button variant="outline" disabled title="Coming soon">
                 <Download className="w-4 h-4 mr-2" />
-                Export All Data
+                Export All Data (Coming Soon)
               </Button>
-              <Button variant="outline">
+              <Button variant="outline" disabled title="Coming soon">
                 <Download className="w-4 h-4 mr-2" />
-                Export Documentation
+                Export Documentation (Coming Soon)
               </Button>
             </div>
             <div className="text-xs text-muted-foreground">
@@ -374,8 +374,8 @@ export default function SettingsPage() {
                   Permanently delete this organization and all associated data
                 </div>
               </div>
-              <Button variant="destructive" size="sm">
-                Delete
+              <Button variant="destructive" size="sm" disabled title="Coming soon">
+                Coming Soon
               </Button>
             </div>
           </CardContent>

@@ -16,6 +16,10 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Codaxi - AI-Powered Documentation Generator",
   description: "Real-time, RAG-powered documentation generator for codebases",
+  icons: {
+    icon: '/favicon.png?v=1',
+    apple: '/favicon.png?v=1'
+  }
 };
 
 export default function RootLayout({

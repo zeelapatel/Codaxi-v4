@@ -74,7 +74,22 @@ export default function BillingPage() {
 
   return (
     <AppShell>
-      <div className="p-6 max-w-6xl mx-auto space-y-8">
+      <div className="relative">
+        <div className="p-6 max-w-6xl mx-auto space-y-8">
+          {(() => {
+            // Safe derived values to satisfy strict typing and avoid NaN
+            const reposScanned = usage?.data?.reposScanned ?? 0
+            const maxRepos = usage?.data?.maxRepos ?? 0
+            const reposPct = maxRepos > 0 ? (reposScanned / maxRepos) * 100 : 0
+
+            const tokensUsed = usage?.data?.tokensUsed ?? 0
+            const maxTokens = usage?.data?.maxTokens ?? 0
+            const tokensPct = maxTokens > 0 ? (tokensUsed / maxTokens) * 100 : 0
+
+            const daysRemaining = usage?.data?.daysRemaining ?? 0
+
+            return null
+          })()}
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -98,10 +113,14 @@ export default function BillingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {usage?.data.reposScanned || 0} / {usage?.data.maxRepos || 0}
+                {(usage?.data?.reposScanned ?? 0)} / {(usage?.data?.maxRepos ?? 0)}
               </div>
               <Progress 
-                value={(usage?.data.reposScanned / usage?.data.maxRepos * 100) || 0} 
+                value={(() => {
+                  const scanned = usage?.data?.reposScanned ?? 0
+                  const total = usage?.data?.maxRepos ?? 0
+                  return total > 0 ? (scanned / total) * 100 : 0
+                })()} 
                 className="mt-2"
               />
             </CardContent>
@@ -114,13 +133,17 @@ export default function BillingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {usage?.data.tokensUsed.toLocaleString() || 0}
+                {(usage?.data?.tokensUsed ?? 0).toLocaleString()}
               </div>
               <div className="text-xs text-muted-foreground">
-                of {usage?.data.maxTokens.toLocaleString() || 0} this month
+                of {(usage?.data?.maxTokens ?? 0).toLocaleString()} this month
               </div>
               <Progress 
-                value={(usage?.data.tokensUsed / usage?.data.maxTokens * 100) || 0} 
+                value={(() => {
+                  const used = usage?.data?.tokensUsed ?? 0
+                  const max = usage?.data?.maxTokens ?? 0
+                  return max > 0 ? (used / max) * 100 : 0
+                })()} 
                 className="mt-2"
               />
             </CardContent>
@@ -132,7 +155,7 @@ export default function BillingPage() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{usage?.data.daysRemaining || 0}</div>
+              <div className="text-2xl font-bold">{usage?.data?.daysRemaining ?? 0}</div>
               <div className="text-xs text-muted-foreground">
                 days remaining
               </div>
@@ -269,6 +292,17 @@ export default function BillingPage() {
             </Button>
           </CardContent>
         </Card>
+        </div>
+
+        {/* Coming Soon Overlay - covers content only, no blur */}
+        <div className="absolute inset-0 z-50 bg-background/60 flex items-center justify-center">
+          <div className="rounded-xl border bg-background/90 p-6 shadow-lg text-center max-w-md mx-auto">
+            <h2 className="text-2xl font-bold mb-2">Coming soon</h2>
+            <p className="text-muted-foreground">
+              Billing is not available yet. You can preview the planned UI, but actions are disabled.
+            </p>
+          </div>
+        </div>
       </div>
     </AppShell>
   )

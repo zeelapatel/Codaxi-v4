@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { GlobalSearch } from '@/components/layout/global-search'
 import { useAuth } from '@/contexts/auth-context'
+import Image from 'next/image'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -48,11 +49,11 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
   const pathname = usePathname()
   const router = useRouter()
   const { sidebarOpen, setSidebarOpen, setSearchOpen } = useUIStore()
-  const { user, logout } = useAuth()
+  const { user, logout, organization } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -85,7 +86,13 @@ export function AppShell({ children }: AppShellProps) {
       <div className="flex items-center h-16 px-6 border-b">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <GitBranch className="w-4 h-4 text-primary-foreground" />
+            <Image 
+              src={mounted ? ((resolvedTheme ?? theme) === 'dark' ? '/darklogo.png' : '/lightlogo.png') : '/lightlogo.png'} 
+              alt="Codaxi logo" 
+              width={32} 
+              height={32} 
+              priority 
+            />
           </div>
           <span className="text-xl font-bold">Codaxi</span>
         </div>
@@ -212,8 +219,13 @@ export function AppShell({ children }: AppShellProps) {
                 </Button>
               </div>
 
-              {/* Theme toggle */}
-              <div className="ml-auto flex items-center gap-2">
+              {/* Org name + Theme toggle */}
+              <div className="ml-auto flex items-center gap-3">
+                {organization?.name ? (
+                  <div className="hidden md:flex items-center max-w-[240px] px-2 py-1 rounded-md border bg-card text-sm text-foreground/90 truncate" title={organization.name}>
+                    <span className="truncate">{organization.name}</span>
+                  </div>
+                ) : null}
                 <Button
                   variant="ghost"
                   size="sm"

@@ -6,7 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { GitBranch, Github, Mail, Eye, EyeOff } from 'lucide-react'
+import { Github, Mail, Eye, EyeOff } from 'lucide-react'
+import Image from 'next/image'
+import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -14,6 +16,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { GuestRoute } from '@/components/auth/protected-route'
 
 function SignInContent() {
+  const { theme, resolvedTheme } = useTheme()
   const router = useRouter()
   const { login, isLoading: authLoading } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
@@ -44,8 +47,14 @@ function SignInContent() {
         {/* Logo */}
         <div className="text-center">
           <Link href="/" className="inline-flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <GitBranch className="w-5 h-5 text-primary-foreground" />
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <Image
+                src={(resolvedTheme ?? theme) === 'dark' ? '/darklogo.png' : '/lightlogo.png'}
+                alt="Codaxi logo"
+                width={32}
+                height={32}
+                priority
+              />
             </div>
             <span className="text-2xl font-bold">Codaxi</span>
           </Link>

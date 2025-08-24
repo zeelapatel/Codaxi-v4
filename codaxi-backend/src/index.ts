@@ -85,7 +85,6 @@ async function startServer() {
 🌐 Server: http://localhost:${config.server.port}
 🔗 Health Check: http://localhost:${config.server.port}/api/health
 📊 Database: Connected
-🔐 JWT Secret: ${config.jwt.secret.substring(0, 10)}...
 
 Available Endpoints:
 • POST /api/auth/register - Register new user
