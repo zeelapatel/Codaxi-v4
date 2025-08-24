@@ -12,12 +12,13 @@ import {
   MessageSquare,
   Sparkles
 } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 
 export default function HomePage() {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -30,8 +31,14 @@ export default function HomePage() {
       <header className="border-b bg-background/95 backdrop-blur sticky top-0 z-50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <GitBranch className="w-4 h-4 text-primary-foreground" />
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <Image
+                src={mounted ? ((resolvedTheme ?? theme) === 'dark' ? '/darklogo.png' : '/lightlogo.png') : '/lightlogo.png'}
+                alt="Codaxi logo"
+                width={32}
+                height={32}
+                priority
+              />
             </div>
             <span className="text-xl font-bold">Codaxi</span>
           </div>

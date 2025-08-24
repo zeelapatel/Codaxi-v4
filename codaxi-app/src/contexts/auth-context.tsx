@@ -44,6 +44,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const response = await apiClient.getProfile()
           if (response.success && response.data) {
             setUser(response.data)
+            // Restore organization from localStorage (persisted during login/register)
+            try {
+              const orgJson = typeof window !== 'undefined' ? localStorage.getItem('codaxi_org') : null
+              if (orgJson) {
+                const org = JSON.parse(orgJson)
+                setOrganization(org)
+              }
+            } catch {}
             
             // Fetch GitHub connection status
             try {
@@ -98,6 +106,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.success && response.data) {
         setUser(response.data.user)
         setOrganization(response.data.organization || null)
+        // Persist organization for page refresh
+        if (typeof window !== 'undefined') {
+          if (response.data.organization) {
+            localStorage.setItem('codaxi_org', JSON.stringify(response.data.organization))
+          } else {
+            localStorage.removeItem('codaxi_org')
+          }
+        }
         toast.success(response.message || 'Login successful!')
         return true
       } else {
@@ -133,6 +149,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (response.data.token) {
           apiClient.setToken(response.data.token)
         }
+        // Persist organization for page refresh
+        if (typeof window !== 'undefined') {
+          if (response.data.organization) {
+            localStorage.setItem('codaxi_org', JSON.stringify(response.data.organization))
+          } else {
+            localStorage.removeItem('codaxi_org')
+          }
+        }
         return true
       } else {
         // Handle validation errors
@@ -163,6 +187,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setGithubConnection(null)
       setGithubUser(null)
       apiClient.setToken(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('codaxi_org')
+      }
       toast.success('Logged out successfully')
     } catch (error) {
       console.error('Logout error:', error)
@@ -172,6 +199,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setGithubConnection(null)
       setGithubUser(null)
       apiClient.setToken(null)
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('codaxi_org')
+      }
     }
   }
 

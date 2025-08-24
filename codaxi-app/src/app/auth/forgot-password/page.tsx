@@ -5,11 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { GitBranch, ArrowLeft, Mail } from 'lucide-react'
+import { ArrowLeft, Mail } from 'lucide-react'
+import Image from 'next/image'
+import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
 export default function ForgotPasswordPage() {
+  const { theme, resolvedTheme } = useTheme()
   const [email, setEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
@@ -32,8 +35,14 @@ export default function ForgotPasswordPage() {
         <div className="w-full max-w-md space-y-6">
           <div className="text-center">
             <Link href="/" className="inline-flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <GitBranch className="w-5 h-5 text-primary-foreground" />
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <Image
+                  src={(resolvedTheme ?? theme) === 'dark' ? '/darklogo.png' : '/lightlogo.png'}
+                  alt="Codaxi logo"
+                  width={32}
+                  height={32}
+                  priority
+                />
               </div>
               <span className="text-2xl font-bold">Codaxi</span>
             </Link>
@@ -84,8 +93,14 @@ export default function ForgotPasswordPage() {
         {/* Logo */}
         <div className="text-center">
           <Link href="/" className="inline-flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <GitBranch className="w-5 h-5 text-primary-foreground" />
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <Image
+                src={(resolvedTheme ?? theme) === 'dark' ? '/darklogo.png' : '/lightlogo.png'}
+                alt="Codaxi logo"
+                width={32}
+                height={32}
+                priority
+              />
             </div>
             <span className="text-2xl font-bold">Codaxi</span>
           </Link>

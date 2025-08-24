@@ -24,7 +24,8 @@ import {
   ExternalLink,
   Eye,
   FolderOpen,
-  Folder
+  Folder,
+  Sparkles
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -190,15 +191,16 @@ export function DocsTab({ repoId }: DocsTabProps) {
       {doc.kind === 'route' && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">API</CardTitle>
-            <CardDescription>Generate demo API data inferred from code</CardDescription>
+            <CardTitle className="text-lg">Sample data</CardTitle>
+            <CardDescription>Generate sample request/response data inferred from code</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">Click to generate request/response examples for this route.</div>
+                <div className="text-sm text-muted-foreground">Click Generate to create sample request/response examples for this route.</div>
                 <Button
                   size="sm"
+                  className="group bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
                   disabled={!selectedDocId || generateSchema.isPending}
                   onClick={async () => {
                     if (!selectedDocId) return
@@ -206,7 +208,16 @@ export function DocsTab({ repoId }: DocsTabProps) {
                     setGenPreview(res.data || null)
                     if (!res.data) toast.error('Failed to generate demo data')
                   }}
-                >{generateSchema.isPending ? 'Generating...' : 'Generate demo api data'}</Button>
+                >
+                  {generateSchema.isPending ? (
+                    <span className="inline-flex items-center animate-pulse">Generating...</span>
+                  ) : (
+                    <span className="inline-flex items-center">
+                      <Sparkles className="w-4 h-4 mr-1 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+                      Generate
+                    </span>
+                  )}
+                </Button>
               </div>
 
               {genPreview && (
