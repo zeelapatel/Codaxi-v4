@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { HealthCheck } from "@/components/health-check";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -34,6 +35,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <Providers>
+          <HealthCheck />
           {children}
         </Providers>
       </body>
