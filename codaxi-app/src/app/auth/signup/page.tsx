@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Github, Eye, EyeOff, CheckCircle } from 'lucide-react'
+import { Github, Eye, EyeOff, CheckCircle, ArrowLeft } from 'lucide-react'
 import Image from 'next/image'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
@@ -86,6 +86,18 @@ function SignUpContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 flex items-center justify-center p-4">
+      <div className="fixed top-4 left-4 z-50">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="inline-flex items-center gap-2"
+          onClick={() => (window.history.length > 1 ? router.back() : router.push('/'))}
+          aria-label="Go back"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </Button>
+      </div>
       <div className="w-full max-w-md space-y-6">
         {/* Logo */}
         <div className="text-center">

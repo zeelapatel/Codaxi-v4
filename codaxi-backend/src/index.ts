@@ -7,6 +7,7 @@ import { db } from './utils/database'
 import { errorHandler, notFoundHandler } from './middleware/error'
 import { requestSizeLimit, corsHeaders } from './middleware/security'
 import routes from './routes'
+import axios from 'axios'
 
 // Create Express app
 const app = express()
@@ -97,6 +98,25 @@ Available Endpoints:
 Ready to accept requests! 🎉
       `)
     })
+
+    // Lightweight keep-alive ping to mitigate cold starts (every 10 minutes)
+    const keepAliveEnabled = process.env.KEEPALIVE_PING !== 'false'
+    if (keepAliveEnabled) {
+      const pingUrl = `${config.server.baseUrl}/api/health`
+      const ping = async () => {
+        try {
+          await axios.get(pingUrl, { timeout: 5000 })
+        } catch (error) {
+          if (isDevelopment) {
+            const message = error instanceof Error ? error.message : 'unknown error'
+            console.warn('Keep-alive ping failed:', message)
+          }
+        }
+      }
+      // Initial ping shortly after start, then every 10 minutes
+      setTimeout(ping, 15000)
+      setInterval(ping, 10 * 60 * 1000)
+    }
 
     // Graceful shutdown
     const gracefulShutdown = async () => {
