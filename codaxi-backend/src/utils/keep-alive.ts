@@ -22,10 +22,8 @@ export class KeepAliveService {
 
     const pingServer = async () => {
       try {
-        // In production, we want to ping localhost since we're pinging ourselves
-        const url = process.env.NODE_ENV === 'production' 
-          ? `http://localhost:${config.server.port}/api/health`
-          : `${process.env.BACKEND_URL || `http://localhost:${config.server.port}`}/api/health`;
+        // Always use internal URL to avoid routing loops
+        const url = `http://localhost:${process.env.PORT || config.server.port}/api/health`;
         
         await axios.get(url);
         console.log('Keep-alive ping successful at:', new Date().toISOString());

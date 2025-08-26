@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 3000
     autoDeploy: true
     disk:
       name: tmp
