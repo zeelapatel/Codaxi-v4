@@ -77,7 +77,6 @@ async function startServer() {
 🌐 Server: http://localhost:${config_1.config.server.port}
 🔗 Health Check: http://localhost:${config_1.config.server.port}/api/health
 📊 Database: Connected
-🔐 JWT Secret: ${config_1.config.jwt.secret.substring(0, 10)}...
 
 Available Endpoints:
 • POST /api/auth/register - Register new user
@@ -90,6 +89,11 @@ Available Endpoints:
 Ready to accept requests! 🎉
       `);
         });
+        // Start keep-alive service in production
+        if (process.env.NODE_ENV === 'production') {
+            const { KeepAliveService } = require('./utils/keep-alive');
+            KeepAliveService.getInstance().start();
+        }
         // Graceful shutdown
         const gracefulShutdown = async () => {
             console.log('\n🔄 Shutting down gracefully...');

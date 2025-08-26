@@ -5,7 +5,14 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
+    healthCheckTimeout: 60
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
     autoDeploy: true
+    disk:
+      name: tmp
+      mountPath: /tmp
+      sizeGB: 0.1
