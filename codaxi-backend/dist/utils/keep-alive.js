@@ -23,12 +23,13 @@ class KeepAliveService {
         }
         const pingServer = async () => {
             try {
-                const baseUrl = process.env.BACKEND_URL || `http://localhost:${config_1.config.server.port}`;
-                await axios_1.default.get(`${baseUrl}/api/health`);
-                console.log('Keep-alive ping successful');
+                // Always use internal URL to avoid routing loops
+                const url = `http://localhost:${process.env.PORT || config_1.config.server.port}/api/health`;
+                await axios_1.default.get(url);
+                console.log('Keep-alive ping successful at:', new Date().toISOString());
             }
             catch (error) {
-                console.error('Keep-alive ping failed:', error);
+                console.error('Keep-alive ping failed:', new Date().toISOString(), error);
             }
         };
         // Initial ping

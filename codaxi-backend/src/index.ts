@@ -99,11 +99,7 @@ Ready to accept requests! 🎉
       `)
     })
 
-    // Start keep-alive service in production
-    if (process.env.NODE_ENV === 'production') {
-      const { KeepAliveService } = require('./utils/keep-alive');
-      KeepAliveService.getInstance().start();
-    }
+    // Keep-alive ping is now handled by the frontend
 
     // Graceful shutdown
     const gracefulShutdown = async () => {
