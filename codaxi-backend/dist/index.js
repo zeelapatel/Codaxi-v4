@@ -10,6 +10,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const config_1 = require("./config");
 const database_1 = require("./utils/database");
 const error_1 = require("./middleware/error");
+const keep_alive_1 = require("./utils/keep-alive");
 const security_1 = require("./middleware/security");
 const routes_1 = __importDefault(require("./routes"));
 // Create Express app
@@ -89,10 +90,9 @@ Available Endpoints:
 Ready to accept requests! 🎉
       `);
         });
-        // Start keep-alive service in production
+        // Start keep-alive service
         if (process.env.NODE_ENV === 'production') {
-            const { KeepAliveService } = require('./utils/keep-alive');
-            KeepAliveService.getInstance().start();
+            keep_alive_1.keepAliveService.start();
         }
         // Graceful shutdown
         const gracefulShutdown = async () => {

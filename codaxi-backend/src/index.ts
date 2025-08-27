@@ -5,6 +5,7 @@ import morgan from 'morgan'
 import { config, isDevelopment } from './config'
 import { db } from './utils/database'
 import { errorHandler, notFoundHandler } from './middleware/error'
+import { keepAliveService } from './utils/keep-alive'
 import { requestSizeLimit, corsHeaders } from './middleware/security'
 import routes from './routes'
 import axios from 'axios'
@@ -99,7 +100,10 @@ Ready to accept requests! 🎉
       `)
     })
 
-    // Keep-alive ping is now handled by the frontend
+    // Start keep-alive service
+    if (process.env.NODE_ENV === 'production') {
+      keepAliveService.start()
+    }
 
     // Graceful shutdown
     const gracefulShutdown = async () => {

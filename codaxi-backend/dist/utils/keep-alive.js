@@ -1,15 +1,11 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KeepAliveService = void 0;
-const axios_1 = __importDefault(require("axios"));
-const config_1 = require("../config");
+exports.keepAliveService = void 0;
+const database_1 = require("./database");
 class KeepAliveService {
     constructor() {
         this.interval = null;
-        this.INTERVAL_TIME = 10 * 60 * 1000; // 10 minutes
+        this.KEEP_ALIVE_INTERVAL = 4 * 60 * 1000; // 4 minutes
     }
     static getInstance() {
         if (!KeepAliveService.instance) {
@@ -21,21 +17,12 @@ class KeepAliveService {
         if (this.interval) {
             return; // Already running
         }
-        const pingServer = async () => {
-            try {
-                // Always use internal URL to avoid routing loops
-                const url = `http://localhost:${process.env.PORT || config_1.config.server.port}/api/health`;
-                await axios_1.default.get(url);
-                console.log('Keep-alive ping successful at:', new Date().toISOString());
-            }
-            catch (error) {
-                console.error('Keep-alive ping failed:', new Date().toISOString(), error);
-            }
-        };
-        // Initial ping
-        pingServer();
+        // Perform initial check
+        this.performKeepAlive();
         // Set up interval
-        this.interval = setInterval(pingServer, this.INTERVAL_TIME);
+        this.interval = setInterval(() => {
+            this.performKeepAlive();
+        }, this.KEEP_ALIVE_INTERVAL);
     }
     stop() {
         if (this.interval) {
@@ -43,6 +30,17 @@ class KeepAliveService {
             this.interval = null;
         }
     }
+    async performKeepAlive() {
+        try {
+            await database_1.db.healthCheck();
+            if (process.env.NODE_ENV === 'development') {
+                console.log('🔄 Keep-alive check performed');
+            }
+        }
+        catch (error) {
+            console.error('❌ Keep-alive check failed:', error);
+        }
+    }
 }
-exports.KeepAliveService = KeepAliveService;
+exports.keepAliveService = KeepAliveService.getInstance();
 //# sourceMappingURL=keep-alive.js.map

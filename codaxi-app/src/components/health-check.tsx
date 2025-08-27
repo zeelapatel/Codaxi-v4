@@ -12,7 +12,7 @@ interface HealthCheckConfig {
 
 const DEFAULT_CONFIG: HealthCheckConfig = {
   initialDelay: 15000, // 15 seconds
-  pollingInterval: 10 * 60 * 1000, // 10 minutes
+  pollingInterval: 5 * 60 * 1000, // 5 minutes
   retryDelay: 5000, // 5 seconds
   maxRetries: 3
 }
