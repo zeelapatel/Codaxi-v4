@@ -19,7 +19,7 @@ import { GuestRoute } from '@/components/auth/protected-route'
 function SignUpContent() {
   const { theme, resolvedTheme } = useTheme()
   const router = useRouter()
-  const { register, isLoading: authLoading } = useAuth()
+  const { register, isLoading: authLoading, connectGoogle } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -73,7 +73,16 @@ function SignUpContent() {
     }
   }
 
-  const handleOAuthSignup = (provider: string) => {
+  const handleOAuthSignup = async (provider: string) => {
+    if (provider === 'Google') {
+      try {
+        const url = await connectGoogle()
+        window.location.href = url
+      } catch (e) {
+        toast.error('Failed to start Google signup')
+      }
+      return
+    }
     toast.info(`${provider} integration coming soon!`)
   }
 

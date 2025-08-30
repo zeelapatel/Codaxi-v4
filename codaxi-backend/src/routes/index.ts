@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { db } from '../utils/database'
 import authRoutes from './auth'
 import githubRoutes from './github'
+import googleRoutes from './google'
 import scanRoutes from './scan'
 import docsRoutes from './docs'
 import { clearRateLimit } from '../middleware/security'
@@ -45,6 +46,7 @@ if (process.env.NODE_ENV === 'development') {
 // API routes
 router.use('/auth', authRoutes)
 router.use('/github', githubRoutes)
+router.use('/google', googleRoutes)
 router.use('/', scanRoutes)
 router.use('/', docsRoutes)
 
