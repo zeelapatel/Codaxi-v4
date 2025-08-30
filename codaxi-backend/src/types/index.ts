@@ -172,9 +172,16 @@ export interface GitHubConfig {
   webhookSecret: string
 }
 
+export interface GoogleConfig {
+  clientId: string
+  clientSecret: string
+  redirectUri: string
+}
+
 export interface AppConfig {
   database: DatabaseConfig
   jwt: JwtConfig
   server: ServerConfig
   github: GitHubConfig
+  google: GoogleConfig
 }

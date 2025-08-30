@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { apiClient, User, Organization, LoginRequest, RegisterRequest } from '@/lib/api-client'
 import { GitHubConnection, GitHubUser, GitHubOAuthRequest } from '@/types/github'
+import { GoogleOAuthRequest } from '@/types/google'
 import { toast } from 'sonner'
 
 interface AuthContextType {
@@ -20,6 +21,8 @@ interface AuthContextType {
   connectGitHub: () => Promise<string>
   handleGitHubCallback: (data: GitHubOAuthRequest) => Promise<boolean>
   disconnectGitHub: () => Promise<void>
+  connectGoogle: () => Promise<string>
+  handleGoogleCallback: (data: GoogleOAuthRequest) => Promise<boolean>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -281,6 +284,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Google methods
+  const connectGoogle = async (): Promise<string> => {
+    const response = await apiClient.generateGoogleAuthUrl()
+    if (response.success && response.data) {
+      return response.data.authUrl
+    }
+    throw new Error(response.message || 'Failed to generate Google auth URL')
+  }
+
+  const handleGoogleCallback = async (data: GoogleOAuthRequest): Promise<boolean> => {
+    try {
+      setIsLoading(true)
+      const response = await apiClient.handleGoogleCallback(data)
+
+      if (response.success && response.data) {
+        setUser(response.data.user)
+        setOrganization(response.data.organization || null)
+        // Persist organization for page refresh
+        if (typeof window !== 'undefined') {
+          if (response.data.organization) {
+            localStorage.setItem('codaxi_org', JSON.stringify(response.data.organization))
+          } else {
+            localStorage.removeItem('codaxi_org')
+          }
+        }
+        // If backend indicates this is a new user, mark for onboarding redirect
+        try {
+          const isNewUser = (response.data as any).isNewUser
+          if (isNewUser) {
+            localStorage.setItem('codaxi_from_signup', '1')
+          }
+        } catch {}
+        return true
+      }
+      // Fallback: if code already used but session exists, attempt profile
+      try {
+        const profile = await apiClient.getProfile()
+        if (profile.success && profile.data) {
+          setUser(profile.data)
+          // Organization will be restored on initializeAuth or remains as previous
+          return true
+        }
+      } catch {}
+      return false
+    } catch (error) {
+      // Fallback on error: try profile if token may already be set
+      try {
+        const profile = await apiClient.getProfile()
+        if (profile.success && profile.data) {
+          setUser(profile.data)
+          return true
+        }
+      } catch {}
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const isGitHubConnected = !!githubConnection?.isActive
 
   const value: AuthContextType = {
@@ -297,7 +359,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshProfile,
     connectGitHub,
     handleGitHubCallback,
-    disconnectGitHub
+    disconnectGitHub,
+    connectGoogle,
+    handleGoogleCallback
   }
 
   return (

@@ -8,7 +8,9 @@ const requiredEnvVars = [
   'DATABASE_URL',
   'JWT_SECRET',
   'GITHUB_CLIENT_ID',
-  'GITHUB_CLIENT_SECRET'
+  'GITHUB_CLIENT_SECRET',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET'
 ]
 
 // Validate required environment variables
@@ -37,6 +39,11 @@ export const config: AppConfig = {
     clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     redirectUri: process.env.GITHUB_REDIRECT_URI || 'http://localhost:5000/api/github/auth/callback',
     webhookSecret: process.env.GITHUB_WEBHOOK_SECRET || 'your-webhook-secret'
+  },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/google/callback`
   }
 }
 

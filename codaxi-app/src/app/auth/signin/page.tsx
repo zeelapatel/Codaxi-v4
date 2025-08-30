@@ -18,7 +18,7 @@ import { GuestRoute } from '@/components/auth/protected-route'
 function SignInContent() {
   const { theme, resolvedTheme } = useTheme()
   const router = useRouter()
-  const { login, isLoading: authLoading } = useAuth()
+  const { login, isLoading: authLoading, connectGoogle } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -37,7 +37,20 @@ function SignInContent() {
     }
   }
 
-  const handleOAuthLogin = (provider: string) => {
+  const handleOAuthLogin = async (provider: string) => {
+    if (provider === 'Google') {
+      try {
+        // ensure flag cleared for signin
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('codaxi_from_signup')
+        }
+        const url = await connectGoogle()
+        window.location.href = url
+      } catch (e) {
+        toast.error('Failed to start Google login')
+      }
+      return
+    }
     toast.info(`${provider} integration coming soon!`)
   }
 

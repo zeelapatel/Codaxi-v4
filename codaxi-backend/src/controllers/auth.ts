@@ -143,6 +143,10 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
   }
 
   // Check password
+  if (!user.password) {
+    sendError(res, 'Invalid email or password', 401)
+    return
+  }
   const isValidPassword = await comparePassword(password, user.password)
   if (!isValidPassword) {
     sendError(res, 'Invalid email or password', 401)

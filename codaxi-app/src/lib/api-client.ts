@@ -11,6 +11,11 @@ import {
 } from '@/types/github'
 import { DocNode } from '@/types'
 
+interface GoogleOAuthRequest {
+  code: string
+  state?: string
+}
+
 export interface ApiResponse<T = any> {
   success: boolean
   message?: string
@@ -179,6 +184,26 @@ class ApiClient {
   // Health check
   async healthCheck(): Promise<ApiResponse> {
     return this.request('/health')
+  }
+
+  // Google OAuth methods
+  async generateGoogleAuthUrl(): Promise<ApiResponse<{ authUrl: string; state: string }>> {
+    return this.request<{ authUrl: string; state: string }>('/google/auth/url', {
+      method: 'POST'
+    })
+  }
+
+  async handleGoogleCallback(data: GoogleOAuthRequest): Promise<ApiResponse<LoginResponse>> {
+    const response = await this.request<LoginResponse>('/google/auth/callback', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+
+    if (response.success && response.data?.token) {
+      this.setToken(response.data.token)
+    }
+
+    return response
   }
 
   // GitHub OAuth methods
