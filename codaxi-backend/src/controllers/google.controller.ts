@@ -75,6 +75,7 @@ export class GoogleController {
       // Find or create user (idempotent)
       const email = userInfo.email.toLowerCase()
 
+      const existingUser = await db.user.findUnique({ where: { email } })
       const randomPassword = await hashPassword(crypto.randomBytes(16).toString('hex'))
       const user = await db.user.upsert({
         where: { email },
@@ -99,6 +100,7 @@ export class GoogleController {
         include: { organization: true }
       })
 
+      let membershipCreated = false
       if (!membership) {
         const baseSlug = (user.name || email)
         const uniqueSlug = await generateUniqueSlug(baseSlug)
@@ -117,6 +119,7 @@ export class GoogleController {
           create: { userId: user.id, organizationId: org.id, role: UserRole.ADMIN },
           include: { organization: true }
         })
+        membershipCreated = true
       }
 
       const organization = membership?.organization || null
@@ -129,10 +132,12 @@ export class GoogleController {
         create: { userId: user.id, token, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
       })
 
+      const isNewUser = !existingUser || membershipCreated
       return sendSuccess(res, {
         user,
         token,
-        organization: organization ? { id: organization.id, name: organization.name, slug: organization.slug } : null
+        organization: organization ? { id: organization.id, name: organization.name, slug: organization.slug } : null,
+        isNewUser
       }, 'Login successful')
     } catch (error) {
       return sendError(res, 'Failed to authenticate with Google', 500)

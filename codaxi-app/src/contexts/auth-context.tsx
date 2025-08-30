@@ -309,6 +309,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             localStorage.removeItem('codaxi_org')
           }
         }
+        // If backend indicates this is a new user, mark for onboarding redirect
+        try {
+          const isNewUser = (response.data as any).isNewUser
+          if (isNewUser) {
+            localStorage.setItem('codaxi_from_signup', '1')
+          }
+        } catch {}
         return true
       }
       // Fallback: if code already used but session exists, attempt profile

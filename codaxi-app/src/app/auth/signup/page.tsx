@@ -76,6 +76,10 @@ function SignUpContent() {
   const handleOAuthSignup = async (provider: string) => {
     if (provider === 'Google') {
       try {
+        // mark that flow started from signup
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('codaxi_from_signup', '1')
+        }
         const url = await connectGoogle()
         window.location.href = url
       } catch (e) {

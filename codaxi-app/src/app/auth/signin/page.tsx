@@ -40,6 +40,10 @@ function SignInContent() {
   const handleOAuthLogin = async (provider: string) => {
     if (provider === 'Google') {
       try {
+        // ensure flag cleared for signin
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('codaxi_from_signup')
+        }
         const url = await connectGoogle()
         window.location.href = url
       } catch (e) {

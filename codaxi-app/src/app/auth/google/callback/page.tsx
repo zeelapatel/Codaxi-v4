@@ -33,6 +33,12 @@ function GoogleCallbackClient() {
       .then((success) => {
         if (success) {
           toast.success('Signed in with Google')
+          const fromSignup = typeof window !== 'undefined' ? localStorage.getItem('codaxi_from_signup') : null
+          if (fromSignup) {
+            try { localStorage.removeItem('codaxi_from_signup') } catch {}
+            router.push('/onboarding?step=github&fromSignup=true')
+            return
+          }
           router.push('/dashboard')
         } else {
           toast.error('Google sign-in failed')
