@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
 import { toast } from 'sonner'
@@ -62,7 +62,20 @@ function GoogleCallbackClient() {
 }
 
 export default function GoogleCallbackPage() {
-  return <GoogleCallbackClient />
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Connecting to Google...</p>
+        </div>
+      </div>
+    }>
+      <GoogleCallbackClient />
+    </Suspense>
+  )
 }
+
+export const dynamic = 'force-dynamic'
 
 
