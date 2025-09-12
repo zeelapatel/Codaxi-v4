@@ -12,19 +12,77 @@ import {
   Code,
   FileText,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 
 export default function HomePage() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [activeDemoIndex, setActiveDemoIndex] = useState(0)
+  const [isDemoOpen, setIsDemoOpen] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(true)
+  const touchStartXRef = useRef<number | null>(null)
+  const touchStartYRef = useRef<number | null>(null)
+
+  const [demoImages, setDemoImages] = useState<string[]>([])
+
+  const goPrev = () => setActiveDemoIndex((i) => (i - 1 + demoImages.length) % demoImages.length)
+  const goNext = () => setActiveDemoIndex((i) => (i + 1) % demoImages.length)
+
+  // Keyboard navigation when dialog is open
+  useEffect(() => {
+    if (!isDemoOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        goPrev()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        goNext()
+      } else if (e.key === 'Home') {
+        e.preventDefault()
+        setActiveDemoIndex(0)
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        setActiveDemoIndex(demoImages.length - 1)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isDemoOpen, demoImages.length])
+
+  // Auto-play slideshow
+  useEffect(() => {
+    if (!isDemoOpen || !isPlaying) return
+    const id = setInterval(() => {
+      setActiveDemoIndex((i) => (i + 1) % demoImages.length)
+    }, 2500)
+    return () => clearInterval(id)
+  }, [isDemoOpen, isPlaying, demoImages.length])
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  // Load demo images from public/demo via API
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/demo-images')
+        const data = await res.json()
+        if (Array.isArray(data?.images) && data.images.length > 0) {
+          setDemoImages(data.images)
+        }
+      } catch {}
+    }
+    load()
   }, [])
 
   return (
@@ -87,16 +145,78 @@ export default function HomePage() {
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Link>
             </Button>
-            <Button 
-              variant="outline" 
-              size="lg" 
-              className="text-lg px-8"
-              onClick={() => {
-                alert("Beta demo: coming soon! Sign up to get early access.")
-              }}
-            >
-              Watch Demo
-            </Button>
+            <Dialog open={isDemoOpen} onOpenChange={(open) => { setIsDemoOpen(open); setIsPlaying(open) }}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="lg" 
+                  className="text-lg px-8"
+                >
+                  Watch Demo
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-6xl p-0 overflow-hidden bg-background/60 backdrop-blur-2xl border border-white/10 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] rounded-2xl">
+                <div className="w-full">
+                  <div
+                    className="relative w-full bg-muted/20"
+                    onTouchStart={(e) => {
+                      touchStartXRef.current = e.touches[0].clientX
+                      touchStartYRef.current = e.touches[0].clientY
+                    }}
+                    onTouchEnd={(e) => {
+                      const x0 = touchStartXRef.current
+                      const y0 = touchStartYRef.current
+                      if (x0 == null || y0 == null) return
+                      const dx = e.changedTouches[0].clientX - x0
+                      const dy = e.changedTouches[0].clientY - y0
+                      const isHorizontal = Math.abs(dx) > Math.abs(dy)
+                      if (isHorizontal && Math.abs(dx) > 40) {
+                        if (dx > 0) goPrev(); else goNext()
+                      }
+                      touchStartXRef.current = null
+                      touchStartYRef.current = null
+                    }}
+                  >
+                    {demoImages.length > 0 && (
+                      <div key={activeDemoIndex} className="relative flex items-center justify-center min-h-[50vh] md:min-h-[60vh] animate-in fade-in-0 zoom-in-95 duration-300">
+                        <img
+                          src={demoImages[activeDemoIndex]}
+                          alt={`Codaxi product demo preview ${activeDemoIndex + 1}`}
+                          className="max-w-full max-h-[70vh] w-auto h-auto object-contain select-none"
+                          loading="eager"
+                          draggable={false}
+                        />
+                      </div>
+                    )}
+                    {/* Top bar removed per request */}
+                    {/* Controls */}
+                    <div className="absolute inset-y-0 left-0 flex items-center p-2">
+                      <Button aria-label="Previous" variant="ghost" size="icon" className="rounded-full bg-background/60 backdrop-blur-md border border-white/10 hover:bg-background/80" onClick={goPrev}>
+                        <ChevronLeft className="w-5 h-5" />
+                      </Button>
+                    </div>
+                    <div className="absolute inset-y-0 right-0 flex items-center p-2">
+                      <Button aria-label="Next" variant="ghost" size="icon" className="rounded-full bg-background/60 backdrop-blur-md border border-white/10 hover:bg-background/80" onClick={goNext}>
+                        <ChevronRight className="w-5 h-5" />
+                      </Button>
+                    </div>
+                    {/* Subtle vignette */}
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/15" />
+                  </div>
+                  {/* Pagination dots only */}
+                  <div className="px-4 pt-3 pb-4">
+                    <div className="flex items-center justify-center gap-1.5">
+                      {demoImages.map((_, idx) => (
+                        <span
+                          key={idx}
+                          className={`h-1.5 rounded-full transition-all ${idx === activeDemoIndex ? 'w-6 bg-primary' : 'w-2 bg-foreground/30'}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </section>
